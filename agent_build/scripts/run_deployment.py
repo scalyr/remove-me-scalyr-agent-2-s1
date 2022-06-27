@@ -53,6 +53,7 @@ sys.path.append(str(_SOURCE_ROOT))
 from agent_build.tools.environment_deployments import deployments
 from agent_build import package_builders  # noqa: F401
 from agent_build.tools import common
+from agent_build.package_builders import ALL_PACKAGE_BUILDERS
 
 
 if __name__ == "__main__":
@@ -63,7 +64,7 @@ if __name__ == "__main__":
     get_list_parser = subparsers.add_parser("list")
     deployment_subparser = subparsers.add_parser("deployment")
     deployment_subparser.add_argument(
-        "deployment_name", choices=deployments.ALL_DEPLOYMENTS.keys()
+        "deployment_name", choices=ALL_PACKAGE_BUILDERS.keys()
     )
 
     deployment_subparsers = deployment_subparser.add_subparsers(
@@ -79,10 +80,11 @@ if __name__ == "__main__":
 
     if args.command == "deployment":
 
-        deployment = deployments.ALL_DEPLOYMENTS[args.deployment_name]
+        builder_cls = ALL_PACKAGE_BUILDERS[args.deployment_name]
         if args.deployment_command == "deploy":
             # Perform the deployment with specified name.
-            deployment.deploy()
+            for step in builder_cls.CACHEABLE_DEPLOYMENT_STEPS:
+                step.run()
             exit(0)
 
         if args.deployment_command == "get-deployment-all-cache-names":
@@ -92,15 +94,15 @@ if __name__ == "__main__":
 
             # Get cache names of from all steps and print them as JSON list. This format is required by the mentioned
             # Github action.
-            step_checksums = []
-            for step in deployment.steps:
-                step_checksums.append(step.cache_key)
+            step_ids = []
+            for step in builder_cls.CACHEABLE_DEPLOYMENT_STEPS:
+                step_ids.append(step.id)
 
-            print(json.dumps(list(reversed(step_checksums))))
+            print(json.dumps(list(sorted(step_ids))))
 
             exit(0)
 
     if args.command == "list":
-        for deployment_name in sorted(deployments.ALL_DEPLOYMENTS.keys()):
+        for deployment_name in sorted(ALL_PACKAGE_BUILDERS.keys()):
             print(deployment_name)
         exit(0)

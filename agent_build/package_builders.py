@@ -37,6 +37,8 @@ from agent_build.tools import constants
 from agent_build.tools.environment_deployments import deployments
 from agent_build.tools import build_in_docker
 from agent_build.tools import common
+from agent_build.tools.constants import Architecture, PackageType
+from agent_build.tools.environment_deployments.deployments import ShellScriptDeploymentStep, DeploymentStep
 
 
 __PARENT_DIR__ = pl.Path(__file__).absolute().parent
@@ -119,10 +121,6 @@ def recursively_delete_dirs_by_name(root_dir: Union[str, pl.Path], *dir_names: s
                     break
 
 
-# Special global collection of all builders. It can be used by CI/CD scripts to find needed package builder.
-ALL_PACKAGE_BUILDERS: Dict[str, "PackageBuilder"] = {}
-
-
 class PackageBuilder(abc.ABC):
     """
         Base abstraction for all Scalyr agent package builders. it can perform build of the package directly on the
@@ -130,6 +128,8 @@ class PackageBuilder(abc.ABC):
         It also uses ':py:module:`agent_build.tools.environment_deployments` features to define and deploy its build
         environment in order to be able to perform the actual build.
     """
+
+    NAME: str
 
     # Type of the package to build.
     PACKAGE_TYPE: constants.PackageType = None
@@ -156,11 +156,13 @@ class PackageBuilder(abc.ABC):
     # Monitors that are no included to to the build. Makes effect only with frozen binaries.
     EXCLUDED_MONITORS = []
 
+    CACHEABLE_DEPLOYMENT_STEPS: List[DeploymentStep] = []
+
     def __init__(
         self,
         architecture: constants.Architecture = constants.Architecture.UNKNOWN,
         base_docker_image: str = None,
-        deployment_step_classes: List[Type[deployments.DeploymentStep]] = None,
+        deployment_steps: List[deployments.DeploymentStep] = None,
         variant: str = None,
         no_versioned_file_name: bool = False,
     ):
@@ -171,6 +173,9 @@ class PackageBuilder(abc.ABC):
         as 'rpm').
         :param no_versioned_file_name:  True if the version number should not be embedded in the artifact's file name.
         """
+
+        self.architecture = architecture
+
         # The path where the build output will be stored.
         self._build_output_path: Optional[pl.Path] = (
             constants.PACKAGE_BUILDER_OUTPUT / self.name
@@ -186,24 +191,11 @@ class PackageBuilder(abc.ABC):
         self._variant = variant
         self._no_versioned_file_name = no_versioned_file_name
 
-        self.architecture = architecture
-
         self.base_docker_image = base_docker_image
 
-        # Create personal deployment for the package builder.
-        self.deployment = deployments.Deployment(
-            name=self.name,
-            step_classes=deployment_step_classes or [],
-            architecture=architecture,
-            base_docker_image=base_docker_image,
-        )
+        self.output_path = constants.DEPLOYMENT_OUTPUT / type(self).NAME
 
-        if self.name in ALL_PACKAGE_BUILDERS:
-            raise ValueError(
-                f"The package builder with name: {self.name} already exists."
-            )
-
-        ALL_PACKAGE_BUILDERS[self.name] = self
+        self.deployment_steps = deployment_steps
 
     @property
     def name(self) -> str:
@@ -704,7 +696,6 @@ class ContainerPackageBuilder(LinuxFhsBasedPackageBuilder):
      This script embeds all assets it needs in it so it can be a standalone artifact. The script is based on
      `docker/scripts/container_builder_base.sh`. See that script for information on it can be used."
     """
-
     # Path to the configuration which should be used in this build.
     CONFIG_PATH = None
     USE_FROZEN_BINARIES = False
@@ -714,13 +705,17 @@ class ContainerPackageBuilder(LinuxFhsBasedPackageBuilder):
 
     FILE_GLOBS_USED_IN_IMAGE_BUILD: List[pl.Path] = []
 
+    BASE_IMAGE_BUILDER_STEP = deployments.BuildDockerBaseImageStep
+
     def __init__(
         self,
-        config_path: pl.Path,
-        name: str,
-        base_image_deployment_step_cls: Type[deployments.BuildDockerBaseImageStep],
-        variant: str = None,
-        no_versioned_file_name: bool = False,
+        image_names=None,
+        registry: str = None,
+        user: str = None,
+        tags: List[str] = None,
+        push: bool = False,
+        use_test_version: bool = False,
+        platforms: List[str] = None
     ):
         """
         :param config_path: Path to the configuration directory which will be copied to the image.
@@ -729,25 +724,41 @@ class ContainerPackageBuilder(LinuxFhsBasedPackageBuilder):
         as 'rpm').
         :param no_versioned_file_name:  True if the version number should not be embedded in the artifact's file name.
         """
-        self._name = name
+        self._name = type(self).NAME
+        self.config_path = type(self).CONFIG_PATH
+
         self.dockerfile_path = __SOURCE_ROOT__ / "agent_build/docker/Dockerfile"
+        self.use_test_version = use_test_version
+        self.image_names = image_names
+        self.registry = registry
+        self.user = user
+        self.tags = tags
+        self.push = push
+
+        base_image_deployment_step = type(self).BASE_IMAGE_BUILDER_STEP
+        if platforms is None:
+            self.base_image_deployment_step = base_image_deployment_step
+            self.platforms = self.base_image_deployment_step.platforms
+        else:
+            self.platforms = platforms
+            self.base_image_deployment_step = type(base_image_deployment_step)(
+                platforms=platforms
+            )
 
         super(ContainerPackageBuilder, self).__init__(
             architecture=constants.Architecture.UNKNOWN,
-            variant=variant,
-            no_versioned_file_name=no_versioned_file_name,
-            deployment_step_classes=[base_image_deployment_step_cls],
+            deployment_steps=[self.base_image_deployment_step],
         )
-
-        self.base_image_deployment_step_cls = base_image_deployment_step_cls
-
-        self.config_path = config_path
 
     @property
     def name(self) -> str:
         # Container builders are special since we have an instance per Dockerfile since different
         # Dockerfile represents a different builder
         return self._name
+
+    def _run_deployment_steps(self):
+        for step in self.deployment_steps:
+            step.run()
 
     def _build_package_files(self):
         super(ContainerPackageBuilder, self)._build_package_files()
@@ -800,16 +811,7 @@ class ContainerPackageBuilder(LinuxFhsBasedPackageBuilder):
         output_path.parent.mkdir(exist_ok=True, parents=True)
         shutil.copy2(self._build_output_path / "scalyr-agent.tar.gz", output_path)
 
-    def build(
-        self,
-        image_names=None,
-        registry: str = None,
-        user: str = None,
-        tags: List[str] = None,
-        push: bool = False,
-        use_test_version: bool = False,
-        platforms: List[str] = constants.AGENT_DOCKER_IMAGE_SUPPORTED_PLATFORMS_STRING,
-    ):
+    def build(self, locally: bool = False):
         """
         This function builds Agent docker image by using the specified dockerfile (defaults to "Dockerfile").
         It passes to dockerfile its own package type through docker build arguments, so the same package builder
@@ -836,17 +838,7 @@ class ContainerPackageBuilder(LinuxFhsBasedPackageBuilder):
         :param platforms: List of platform names to build the image for.
         """
 
-        for plat in platforms:
-            if plat not in constants.AGENT_DOCKER_IMAGE_SUPPORTED_PLATFORMS_STRING:
-                raise ValueError(
-                    f"Unsupported platform: {plat}. Valid values are: {constants.AGENT_DOCKER_IMAGE_SUPPORTED_PLATFORMS_STRING}"
-                )
-
-        # There is no other easy way to pass parameters to the deployment bash script so we
-        # communicate with it via environment variables
-        os.environ["TO_BUILD_PLATFORMS"] = ",".join(platforms)
-
-        registry_data_path = self.deployment.output_path / "output_registry"
+        registry_data_path = self.base_image_deployment_step.output_directory / "output_registry"
 
         if not common.IN_CICD:
             # If there's not a CI/CD then the deployment has to be done explicitly.
@@ -870,7 +862,7 @@ class ContainerPackageBuilder(LinuxFhsBasedPackageBuilder):
                         # we don't accidentally delete system stuff.
                         cwd = os.getcwd()
                         assert str(registry_data_path).startswith(
-                            str(self.deployment.output_path)
+                            str(self.output_path)
                         )
                         assert str(registry_data_path).startswith(cwd)
                         common.check_output_with_log(
@@ -879,7 +871,7 @@ class ContainerPackageBuilder(LinuxFhsBasedPackageBuilder):
                     else:
                         raise e
 
-            self.deployment.deploy()
+            self._run_deployment_steps()
 
         # Create docker buildx builder instance. # Without it the result image won't be pushed correctly
         # to the local registry.
@@ -932,31 +924,31 @@ class ContainerPackageBuilder(LinuxFhsBasedPackageBuilder):
         logging.info("Build base image.")
 
         base_image_tag_suffix = (
-            self.base_image_deployment_step_cls.BASE_DOCKER_IMAGE_TAG_SUFFIX
+            self.base_image_deployment_step.python_image_suffix
         )
 
         base_image_name = f"agent_base_image:{base_image_tag_suffix}"
 
-        if use_test_version:
+        if self.use_test_version:
             logging.info("Build testing image version.")
             base_image_name = f"{base_image_name}-testing"
 
-        registry = registry or ""
-        tags = tags or ["latest"]
+        registry = self.registry or ""
+        tags = self.tags or ["latest"]
 
         if not os.path.isfile(self.dockerfile_path):
             raise ValueError(f"File path {self.dockerfile_path} doesn't exist")
 
         tag_options = []
 
-        image_names = image_names or type(self).RESULT_IMAGE_NAMES
+        image_names = self.image_names or type(self).RESULT_IMAGE_NAMES
 
         for image_name in image_names:
 
             full_name = image_name
 
-            if user:
-                full_name = f"{user}/{full_name}"
+            if self.user:
+                full_name = f"{self.user}/{full_name}"
 
             if registry:
                 full_name = f"{registry}/{full_name}"
@@ -995,17 +987,17 @@ class ContainerPackageBuilder(LinuxFhsBasedPackageBuilder):
             )
 
         # If we need to push, then specify all platforms.
-        if push:
-            for plat in platforms:
+        if self.push:
+            for plat in self.platforms:
                 command_options.append("--platform")
                 command_options.append(plat)
 
-        if use_test_version:
+        if self.use_test_version:
             # Pass special build argument to produce testing image.
             command_options.append("--build-arg")
             command_options.append("MODE=testing")
 
-        if push:
+        if self.push:
             command_options.append("--push")
         else:
             command_options.append("--load")
@@ -1013,7 +1005,7 @@ class ContainerPackageBuilder(LinuxFhsBasedPackageBuilder):
         command_options.append(str(__SOURCE_ROOT__))
 
         build_log_message = f"Build images:  {image_names}"
-        if push:
+        if self.push:
             build_log_message = f"{build_log_message} and push."
         else:
             build_log_message = (
@@ -1039,96 +1031,171 @@ class ContainerPackageBuilder(LinuxFhsBasedPackageBuilder):
             )
 
 
-class K8sPackageBuilder(ContainerPackageBuilder):
-    """
-    An image for running the agent on Kubernetes.
-    """
-
-    PACKAGE_TYPE = constants.PackageType.K8S
-    RESULT_IMAGE_NAMES = ["scalyr-k8s-agent"]
-
-
-class DockerJsonPackageBuilder(ContainerPackageBuilder):
-    """
-    An image for running on Docker configured to fetch logs via the file system (the container log
-    directory is mounted to the agent container.)  This is the preferred way of running on Docker.
-    This image is published to scalyr/scalyr-agent-docker-json.
-    """
-
-    PACKAGE_TYPE = constants.PackageType.DOCKER_JSON
-    RESULT_IMAGE_NAMES = ["scalyr-agent-docker-json"]
-
-
-class DockerSyslogPackageBuilder(ContainerPackageBuilder):
-    """
-    An image for running on Docker configured to receive logs from other containers via syslog.
-    This is the deprecated approach (but is still published under scalyr/scalyr-docker-agent for
-    backward compatibility.)  We also publish this under scalyr/scalyr-docker-agent-syslog to help
-    with the eventual migration.
-    """
-
-    PACKAGE_TYPE = constants.PackageType.DOCKER_SYSLOG
-    RESULT_IMAGE_NAMES = [
-        "scalyr-agent-docker-syslog",
-        "scalyr-agent-docker",
-    ]
-
-
-class DockerApiPackageBuilder(ContainerPackageBuilder):
-    """
-    An image for running on Docker configured to fetch logs via the Docker API using docker_raw_logs: false
-    configuration option.
-    """
-
-    PACKAGE_TYPE = constants.PackageType.DOCKER_API
-    RESULT_IMAGE_NAMES = ["scalyr-agent-docker-api"]
+# class K8sPackageBuilder(ContainerPackageBuilder):
+#     """
+#     An image for running the agent on Kubernetes.
+#     """
+#
+#     PACKAGE_TYPE = constants.PackageType.K8S
+#     RESULT_IMAGE_NAMES = ["scalyr-k8s-agent"]
+#
+#
+# class DockerJsonPackageBuilder(ContainerPackageBuilder):
+#     """
+#     An image for running on Docker configured to fetch logs via the file system (the container log
+#     directory is mounted to the agent container.)  This is the preferred way of running on Docker.
+#     This image is published to scalyr/scalyr-agent-docker-json.
+#     """
+#
+#     PACKAGE_TYPE = constants.PackageType.DOCKER_JSON
+#     RESULT_IMAGE_NAMES = ["scalyr-agent-docker-json"]
+#
+#
+# class DockerSyslogPackageBuilder(ContainerPackageBuilder):
+#     """
+#     An image for running on Docker configured to receive logs from other containers via syslog.
+#     This is the deprecated approach (but is still published under scalyr/scalyr-docker-agent for
+#     backward compatibility.)  We also publish this under scalyr/scalyr-docker-agent-syslog to help
+#     with the eventual migration.
+#     """
+#
+#     PACKAGE_TYPE = constants.PackageType.DOCKER_SYSLOG
+#     RESULT_IMAGE_NAMES = [
+#         "scalyr-agent-docker-syslog",
+#         "scalyr-agent-docker",
+#     ]
+#
+#
+# class DockerApiPackageBuilder(ContainerPackageBuilder):
+#     """
+#     An image for running on Docker configured to fetch logs via the Docker API using docker_raw_logs: false
+#     configuration option.
+#     """
+#
+#     PACKAGE_TYPE = constants.PackageType.DOCKER_API
+#     RESULT_IMAGE_NAMES = ["scalyr-agent-docker-api"]
 
 
 _CONFIGS_PATH = __SOURCE_ROOT__ / "docker"
 _AGENT_BUILD_DOCKER_PATH = constants.SOURCE_ROOT / "agent_build" / "docker"
 
-# Create builders for each scalyr agent docker image. Those builders will be executed in the Dockerfile to
-# create the filesystem for the image.
-DOCKER_JSON_CONTAINER_BUILDER_DEBIAN = DockerJsonPackageBuilder(
-    name="docker-json-debian",
-    config_path=_CONFIGS_PATH / "docker-json-config",
-    base_image_deployment_step_cls=deployments.BuildDebianDockerBaseImageStep,
-)
-DOCKER_JSON_CONTAINER_BUILDER_ALPINE = DockerJsonPackageBuilder(
-    name="docker-json-alpine",
-    config_path=_CONFIGS_PATH / "docker-json-config",
-    base_image_deployment_step_cls=deployments.BuildAlpineDockerBaseImageStep,
-)
+# DEBIAN_DOCKER_BASE_IMAGE_BUILD_STEP = deployments.BuildDebianDockerBaseImageStep(
+#     platforms=AGENT_DOCKER_IMAGE_SUPPORTED_PLATFORMS
+# )
+#
+# ALPINE_DOCKER_BASE_IMAGE_BUILD_STEP = deployments.BuildAlpineDockerBaseImageStep(
+#     platforms=AGENT_DOCKER_IMAGE_SUPPORTED_PLATFORMS
+# )
 
-DOCKER_SYSLOG_CONTAINER_BUILDER_DEBIAN = DockerSyslogPackageBuilder(
-    name="docker-syslog-debian",
-    config_path=_CONFIGS_PATH / "docker-syslog-config",
-    base_image_deployment_step_cls=deployments.BuildDebianDockerBaseImageStep,
-)
-DOCKER_SYSLOG_CONTAINER_BUILDER_ALPINE = DockerSyslogPackageBuilder(
-    name="docker-syslog-alpine",
-    config_path=_CONFIGS_PATH / "docker-syslog-config",
-    base_image_deployment_step_cls=deployments.BuildAlpineDockerBaseImageStep,
-)
+ALL_DEPLOYMENT_STEPS_LIST = []
+#
+# ALL_DEPLOYMENT_STEPS_LIST.append(DEBIAN_DOCKER_BASE_IMAGE_BUILD_STEP)
+# ALL_DEPLOYMENT_STEPS_LIST.append(ALPINE_DOCKER_BASE_IMAGE_BUILD_STEP)
 
-DOCKER_API_CONTAINER_BUILDER_DEBIAN = DockerApiPackageBuilder(
-    name="docker-api-debian",
-    config_path=_CONFIGS_PATH / "docker-api-config",
-    base_image_deployment_step_cls=deployments.BuildDebianDockerBaseImageStep,
-)
-DOCKER_API_CONTAINER_BUILDER_ALPINE = DockerApiPackageBuilder(
-    name="docker-api-alpine",
-    config_path=_CONFIGS_PATH / "docker-api-config",
-    base_image_deployment_step_cls=deployments.BuildAlpineDockerBaseImageStep,
-)
 
-K8S_CONTAINER_BUILDER_DEBIAN = K8sPackageBuilder(
-    name="k8s-debian",
-    config_path=_CONFIGS_PATH / "k8s-config",
-    base_image_deployment_step_cls=deployments.BuildDebianDockerBaseImageStep,
-)
-K8S_CONTAINER_BUILDER_ALPINE = K8sPackageBuilder(
-    name="k8s-alpine",
-    config_path=_CONFIGS_PATH / "k8s-config",
-    base_image_deployment_step_cls=deployments.BuildAlpineDockerBaseImageStep,
-)
+_DISTRO_TO_PYTHON_IMAGE_SUFFIX = {
+    "debian": "slim",
+    "alpine": "alpine"
+}
+
+# CPU architectures or platforms that has to be supported by the Agent docker images,
+_AGENT_DOCKER_IMAGE_SUPPORTED_PLATFORMS = [
+    Architecture.X86_64.as_docker_platform.value,
+    Architecture.ARM64.as_docker_platform.value,
+    Architecture.ARMV7.as_docker_platform.value,
+]
+
+_AGENT_DOCKER_IMAGES_RESULT_IMAGE_NAME = {
+    "docker-json": ["scalyr-agent-docker-json"],
+    "docker-syslog": [
+        "scalyr-agent-docker-syslog",
+        "scalyr-agent-docker",
+    ],
+    "docker-api": ["scalyr-agent-docker-api"],
+    "k8s": ["scalyr-k8s-agent"]
+}
+
+DOCKER_IMAGE_PACKAGE_BUILDERS = {}
+for distro_name in ["debian", "alpine"]:
+
+    base_docker_image_step = deployments.BuildDockerBaseImageStep(
+        name=f"agent-docker-base-image-{distro_name}",
+        python_image_suffix=_DISTRO_TO_PYTHON_IMAGE_SUFFIX[distro_name],
+        platforms=_AGENT_DOCKER_IMAGE_SUPPORTED_PLATFORMS
+    )
+
+    ALL_DEPLOYMENT_STEPS_LIST.append(base_docker_image_step)
+
+    for agent_package_type in [
+        PackageType.DOCKER_JSON,
+        PackageType.DOCKER_SYSLOG,
+        PackageType.DOCKER_API,
+        PackageType.K8S
+    ]:
+        class DockerImageBuilder(ContainerPackageBuilder):
+            NAME = f"{agent_package_type.value}-{distro_name}"
+            PACKAGE_TYPE = agent_package_type
+            CONFIG_PATH = _CONFIGS_PATH / f"{agent_package_type.value}-config"
+            RESULT_IMAGE_NAMES = _AGENT_DOCKER_IMAGES_RESULT_IMAGE_NAME[agent_package_type.value]
+            BASE_IMAGE_BUILDER_STEP = base_docker_image_step
+            CACHEABLE_DEPLOYMENT_STEPS = [base_docker_image_step]
+
+        DOCKER_IMAGE_PACKAGE_BUILDERS[DockerImageBuilder.NAME] = DockerImageBuilder
+
+
+class BuildPythonBase(ShellScriptDeploymentStep):
+    @property
+    def script_path(self) -> pl.Path:
+        return pl.Path("agent_build/tools/environment_deployments/steps/prepare_python_base.sh")
+
+
+class BuildPython(ShellScriptDeploymentStep):
+    def __init__(
+        self,
+        deployment: "Deployment",
+        architecture: constants.Architecture,
+        previous_step: Union[str, "DeploymentStep"] = None,
+    ):
+        super(BuildPython, self).__init__(
+            deployment=deployment,
+            architecture=architecture,
+            previous_step=previous_step
+        )
+
+    @property
+    def script_path(self) -> pl.Path:
+        return pl.Path("agent_build/tools/environment_deployments/steps/build_python.sh")
+
+
+class FpmBasedPackageBuilder(LinuxFhsBasedPackageBuilder):
+
+    def _build_agent_install_root(self):
+        super(FpmBasedPackageBuilder, self)._build_agent_install_root()
+
+    def _build_package_files(self):
+        super(FpmBasedPackageBuilder, self)._build_package_files()
+
+    def _build(self):
+        pass
+
+class DebPackageBuilder(FpmBasedPackageBuilder):
+    PACKAGE_TYPE = PackageType.DEB
+    USE_FROZEN_BINARIES = True
+    INSTALL_TYPE = "package"
+
+# DEB_PACKAGE_BUILDER = DebPackageBuilder(
+#     architecture=Architecture.X86_64,
+#     deployment_step_classes=[BuildPython],
+#     base_docker_image="centos:6"
+# )
+
+ALL_PACKAGE_BUILDERS: Dict[str, Type["PackageBuilder"]] = {
+    **DOCKER_IMAGE_PACKAGE_BUILDERS
+}
+
+ALL_DEPLOYMENT_STEPS = {
+    step.id: step for step in ALL_DEPLOYMENT_STEPS_LIST
+}
+
+
+a=10

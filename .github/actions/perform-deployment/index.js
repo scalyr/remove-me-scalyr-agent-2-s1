@@ -103,9 +103,9 @@ async function performDeployment() {
     // 3. If there are deployment steps, which results haven't been found during the step 1, then the results of those
     //    steps will be cached using their cache names.
 
-    const deploymentName = core.getInput("deployment-name")
-    const cacheVersionSuffix = core.getInput("cache-version-suffix")
-    const cacheDir = path.resolve(path.join("agent_build_output", "deployment_cache", deploymentName))
+    const deploymentName = core.getInput("deployment-name");
+    const cacheVersionSuffix = core.getInput("cache-version-suffix");
+    const cacheDir = path.resolve(path.join("agent_build_output", "deployment_cache", deploymentName));
 
     if (!fs.existsSync(cacheDir)) {
         fs.mkdirSync(cacheDir,{recursive: true})

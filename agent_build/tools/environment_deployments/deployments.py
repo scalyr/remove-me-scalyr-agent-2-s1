@@ -14,6 +14,7 @@
 
 
 import abc
+import hashlib
 import os
 import pathlib as pl
 import shlex
@@ -27,6 +28,7 @@ from agent_build.tools import common
 from agent_build.tools import constants
 from agent_build.tools import files_checksum_tracker
 from agent_build.tools import build_in_docker
+from agent_build.tools.constants import Architecture
 
 
 _PARENT_DIR = pl.Path(__file__).parent.parent.absolute()
@@ -88,9 +90,10 @@ class DeploymentStep(files_checksum_tracker.FilesChecksumTracker):
 
     def __init__(
         self,
-        deployment: "Deployment",
+        name: str,
         architecture: constants.Architecture,
         previous_step: Union[str, "DeploymentStep"] = None,
+        environment_variables: Dict[str, str] = None
     ):
         """
         :param deployment: The deployment instance where this step is added.
@@ -103,8 +106,8 @@ class DeploymentStep(files_checksum_tracker.FilesChecksumTracker):
 
         super(DeploymentStep, self).__init__()
 
+        self.name = name
         self.architecture = architecture
-        self.deployment = deployment
 
         if isinstance(previous_step, DeploymentStep):
             # The previous step is specified.
@@ -120,9 +123,11 @@ class DeploymentStep(files_checksum_tracker.FilesChecksumTracker):
             self.base_docker_image = None
             self.previous_step = None
 
+        self.environment_variables = environment_variables or {}
+
         # personal cache directory of the step.
-        self.cache_directory = self.deployment.cache_directory / self.cache_key
-        self.output_directory = self.deployment.output_directory / self.unique_name
+        self.cache_directory = constants.DEPLOYMENT_CACHE_DIR / self.id
+        self.output_directory = constants.DEPLOYMENT_OUTPUT / self.id
 
     @property
     def _tracked_file_globs(self) -> List[pl.Path]:
@@ -130,35 +135,6 @@ class DeploymentStep(files_checksum_tracker.FilesChecksumTracker):
         Get filed that has to be tracked by the step in order to calculate checksum, for caching.
         """
         return []
-
-    @property
-    def name(self) -> str:
-        """
-        Name of the deployment step. It is just a name of the class name but in snake case.
-        """
-        class_name = type(self).__name__
-        return re.sub(r"(?<!^)(?=[A-Z])", "_", class_name).lower()
-
-    @property
-    def unique_name(self) -> str:
-        """
-        Create name for the step. It has to contain all specific information about the step,
-        so it can be used as unique cache key.
-        """
-
-        name = self.name
-
-        if self.previous_step:
-            name = f"{name}_{self.previous_step.name}"
-
-        name = f"{name}_{self.architecture.value}"
-
-        # If its a docker deployment, then add the docker image to the name
-        if self.in_docker:
-            image_suffix = self.initial_docker_image.replace(":", "_")
-            name = f"{name}_{image_suffix}"
-
-        return name
 
     @property
     def initial_docker_image(self) -> str:
@@ -174,18 +150,15 @@ class DeploymentStep(files_checksum_tracker.FilesChecksumTracker):
         return self.previous_step.initial_docker_image
 
     @property
-    def cache_key(self) -> str:
-        """
-        Unique cache key based on the name of the step and on the content of used files.
-        """
-        return f"{self.unique_name}_{self.checksum}"
+    def id(self):
+        return f"{self.name}_{self.checksum}"
 
     @property
     def result_image_name(self) -> str:
         """
         The name of the result docker image, just the same as cache key.
         """
-        return self.cache_key
+        return self.id
 
     @property
     def in_docker(self) -> bool:
@@ -200,12 +173,27 @@ class DeploymentStep(files_checksum_tracker.FilesChecksumTracker):
         The checksum of the step. It is based on content of the used files + checksum of the previous step.
         """
 
-        if self.previous_step:
-            additional_seed = self.previous_step.checksum
-        else:
-            additional_seed = None
+        sha256 = hashlib.sha256()
 
-        return self._get_files_checksum(additional_seed=additional_seed)
+        if self.previous_step:
+            sha256.update(self.previous_step.checksum.encode())
+
+        sorted_env_variables = {
+            name: self.environment_variables[name]
+            for name in sorted(self.environment_variables.keys())
+        }
+
+        for name, value in sorted_env_variables.items():
+            sha256.update(name.encode())
+            sha256.update(value.encode())
+
+        # Calculate the sha256 for each file's content, filename and permissions.
+        sha256 = hashlib.sha256()
+        for file_path in self._original_files:
+            sha256.update(str(file_path.relative_to(constants.SOURCE_ROOT)).encode())
+            sha256.update(file_path.read_bytes())
+
+        return sha256.hexdigest()
 
     def run(self):
         """
@@ -371,14 +359,16 @@ class ShellScriptDeploymentStep(DeploymentStep):
 
     def __init__(
         self,
-        deployment: "Deployment",
+        name: str,
         architecture: constants.Architecture,
         previous_step: Union[str, "DeploymentStep"] = None,
+        environment_variables: Dict[str, str] = None
     ):
         super(ShellScriptDeploymentStep, self).__init__(
-            deployment=deployment,
+            name=name,
             architecture=architecture,
             previous_step=previous_step,
+            environment_variables=environment_variables
         )
 
     @property
@@ -426,7 +416,7 @@ class ShellScriptDeploymentStep(DeploymentStep):
         # script, so it can use the cache too.
         command_args.append(str(pl.Path(self.cache_directory)))
 
-        command_args.append(str(self.deployment.output_directory))
+        command_args.append(str(self.output_directory))
 
         return command_args
 
@@ -441,6 +431,9 @@ class ShellScriptDeploymentStep(DeploymentStep):
 
         if common.IN_CICD:
             env["IN_CICD"] = "1"
+
+        for name, value in self.environment_variables.items():
+            env[name] = value
 
         try:
             output = common.run_command(
@@ -560,7 +553,6 @@ class Deployment:
 
         for step_cls in step_classes:
             step = step_cls(
-                deployment=self,
                 architecture=architecture,
                 # specify previous step for the current step.
                 previous_step=previous_step,
@@ -653,7 +645,23 @@ class BuildDockerBaseImageStep(ShellScriptDeploymentStep):
     # Suffix of that python image, that is used as the base image for our base image.
     # has to match one of the names from the 'agent_build/tools/environment_deployments/steps/build_base_docker_image'
     # directory, except 'build_base_images_common_lib.sh', it is a helper library.
-    BASE_DOCKER_IMAGE_TAG_SUFFIX: str
+
+    def __init__(
+        self,
+        name: str,
+        python_image_suffix: str,
+        platforms: List[str]
+    ):
+        self.python_image_suffix = python_image_suffix
+        self.platforms = platforms
+
+        super(BuildDockerBaseImageStep, self).__init__(
+            name=name,
+            architecture=Architecture.UNKNOWN,
+            environment_variables={
+                "TO_BUILD_PLATFORMS": ",".join(platforms)
+            }
+        )
 
     @property
     def script_path(self) -> pl.Path:
@@ -662,7 +670,7 @@ class BuildDockerBaseImageStep(ShellScriptDeploymentStep):
         """
         return (
             _REL_DEPLOYMENT_BUILD_BASE_IMAGE_STEP
-            / f"{type(self).BASE_DOCKER_IMAGE_TAG_SUFFIX}.sh"
+            / f"{self.python_image_suffix}.sh"
         )
 
     @property
@@ -687,7 +695,7 @@ class BuildDebianDockerBaseImageStep(BuildDockerBaseImageStep):
     """
     Subclass that builds agent's base docker image based on debian (slim)
     """
-
+    NAME = "agent-docker-base-image-debian"
     BASE_DOCKER_IMAGE_TAG_SUFFIX = "slim"
 
 
@@ -695,14 +703,14 @@ class BuildAlpineDockerBaseImageStep(BuildDockerBaseImageStep):
     """
     Subclass that builds agent's base docker image based on alpine.
     """
-
+    NAME = "agent-docker-base-image-alpine"
     BASE_DOCKER_IMAGE_TAG_SUFFIX = "alpine"
 
 
-# Create common test environment that will be used by GitHub Actions CI
-COMMON_TEST_ENVIRONMENT = Deployment(
-    # Name of the deployment.
-    # Call the local './.github/actions/perform-deployment' action with this name.
-    "test_environment",
-    step_classes=[InstallTestRequirementsDeploymentStep],
-)
+# # Create common test environment that will be used by GitHub Actions CI
+# COMMON_TEST_ENVIRONMENT = Deployment(
+#     # Name of the deployment.
+#     # Call the local './.github/actions/perform-deployment' action with this name.
+#     "test_environment",
+#     step_classes=[InstallTestRequirementsDeploymentStep],
+# )

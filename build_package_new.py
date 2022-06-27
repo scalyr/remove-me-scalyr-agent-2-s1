@@ -15,7 +15,7 @@
 # This is a new package build script which uses new package  build logic.
 # usage:
 #       build_package_new.py <name of the package> --output-dir <output directory>
-
+import json
 import logging
 import pathlib as pl
 import argparse
@@ -34,6 +34,7 @@ sys.path.append(str(__SOURCE_ROOT__))
 from agent_build.tools import common
 from agent_build.tools import constants
 from agent_build import package_builders
+from agent_build.package_builders import ALL_PACKAGE_BUILDERS, DOCKER_IMAGE_PACKAGE_BUILDERS
 
 _AGENT_BUILD_PATH = __SOURCE_ROOT__ / "agent_build"
 
@@ -47,7 +48,9 @@ if __name__ == "__main__":
     # Add subparsers for all packages except docker builders.
     subparsers = parser.add_subparsers(dest="package_name", required=True)
 
-    for builder_name, builder in package_builders.ALL_PACKAGE_BUILDERS.items():
+    all_package_builders = {}
+
+    for builder_name, builder_cls in ALL_PACKAGE_BUILDERS.items():
         package_parser = subparsers.add_parser(name=builder_name)
 
         # Define argument for all packages
@@ -84,7 +87,7 @@ if __name__ == "__main__":
         )
 
         # If that's a docker image builder, then add additional commands.
-        if isinstance(builder, package_builders.ContainerPackageBuilder):
+        if issubclass(builder_cls, package_builders.ContainerPackageBuilder):
             # Add subparser for command that tell to the builder only to build the tarball with the image's filesystem
             # This command is used by the source Dockerfile of the image to create agent's filesystem inside the image.
 
@@ -126,14 +129,10 @@ if __name__ == "__main__":
             package_parser.add_argument(
                 "--platforms",
                 dest="platforms",
-                default=",".join(
-                    constants.AGENT_DOCKER_IMAGE_SUPPORTED_PLATFORMS_STRING
-                ),
                 help="Comma delimited list of platforms to build (and optionally push) the image for.",
             )
 
         else:
-
             # Add output dir argument. It is required only for non-docker image builds.
             package_parser.add_argument(
                 "--output-dir",
@@ -159,8 +158,22 @@ if __name__ == "__main__":
     package_builder = package_builders.ALL_PACKAGE_BUILDERS[builder_name]
 
     # If that's a docker image builder handle their arguments too.
-    if isinstance(package_builder, package_builders.ContainerPackageBuilder):
+    if builder_name in DOCKER_IMAGE_PACKAGE_BUILDERS:
+        builder_cls = DOCKER_IMAGE_PACKAGE_BUILDERS[builder_name]
 
+        if args.platforms:
+            platforms = args.platforms.split(",")
+        else:
+            platforms = None
+
+        package_builder = builder_cls(
+            push=args.push,
+            registry=args.registry,
+            user=args.user,
+            tags=args.tag or [],
+            use_test_version=args.coverage,
+            platforms=platforms
+        )
         if args.only_filesystem_tarball:
             # Build only image filesystem.
             package_builder.build_filesystem_tarball(
@@ -168,14 +181,10 @@ if __name__ == "__main__":
             )
             exit(0)
 
-        package_builder.build(
-            push=args.push,
-            registry=args.registry,
-            user=args.user,
-            tags=args.tag or [],
-            use_test_version=args.coverage,
-            platforms=args.platforms.split(","),
-        )
+        package_builder.build()
         exit(0)
 
-    package_builder.build(locally=args.locally)
+    # if isinstance(package_builder, package_builders.FpmBasedPackageBuilder):
+    #     # package_builder.build()
+
+    #package_builder.build(locally=args.locally)
