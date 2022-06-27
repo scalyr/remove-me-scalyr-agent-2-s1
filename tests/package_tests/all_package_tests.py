@@ -27,13 +27,16 @@ from tests.package_tests.internals import docker_test, k8s_test
 from agent_build.tools.environment_deployments import deployments
 from agent_build.tools import build_in_docker
 from agent_build.tools import common
+from agent_build.package_builders import DOCKER_IMAGE_PACKAGE_BUILDERS, PackageBuilder, DockerImageBuilder
+from agent_build.tools.environment_deployments.deployments import DeploymentStep
+from agent_build.tools.constants import Architecture
 
 _PARENT_DIR = pl.Path(__file__).parent
 __SOURCE_ROOT__ = _PARENT_DIR.parent.parent.absolute()
 
 # The global collection of all test. It is used by CI aimed scripts in order to be able to perform those test just
 # by knowing the name of needed test.
-ALL_PACKAGE_TESTS: Dict[str, "Test"] = {}
+ALL_PACKAGE_TESTS: Dict[str, Type["Test"]] = {}
 
 # Maps package test of some package to the builder of this package. Also needed for the GitHub Actions CI to
 # create a job matrix for a particular package tests.
@@ -47,13 +50,14 @@ class Test:
     Particular package test. If combines information about the package type, architecture,
     deployment and the system where test has to run.
     """
+    NAME: str
+    PACKAGE_BUILDER_CLS: Type[PackageBuilder]
+    CACHEABLE_DEPLOYMENT_STEPS: List[DeploymentStep]
 
     def __init__(
         self,
-        base_name: str,
-        package_builder: package_builders.PackageBuilder,
-        additional_deployment_steps: List[Type[deployments.DeploymentStep]] = None,
-        deployment_architecture: constants.Architecture = None,
+        #base_name: str,
+        #package_builder_cls: Type[package_builders.PackageBuilder],
     ):
         """
         :param base_name: Base name of the test.
@@ -63,43 +67,15 @@ class Test:
         :param deployment_architecture: Architecture of the machine where the test's deployment has to be perform.
             by default it is an architecture of the package builder.
         """
-        self._base_name = base_name
-        self.package_builder = package_builder
-        self.architecture = deployment_architecture or package_builder.architecture
+        #self._base_name = base_name
+        #self.package_builder_cls = package_builder_cls
 
-        additional_deployment_steps = additional_deployment_steps or []
-
-        # since there may be needed to build the package itself first, we have to also deploy the steps
-        # from the package builder's deployment, to provide needed environment for the builder,
-        # so we add the steps from the builder's deployment first.
-        additional_deployment_steps = [
-            *[type(step) for step in package_builder.deployment.steps],
-            *additional_deployment_steps,
-        ]
-
-        self.deployment = deployments.Deployment(
-            name=self.unique_name,
-            step_classes=additional_deployment_steps,
-            architecture=deployment_architecture or package_builder.architecture,
-            base_docker_image=package_builder.base_docker_image,
-        )
-
-        if self.unique_name in ALL_PACKAGE_TESTS:
-            raise ValueError(
-                f"The package test with name: {self.unique_name} already exists."
-            )
-
-        # Add the current test to the global tests collection so it can be invoked from command line.
-        ALL_PACKAGE_TESTS[self.unique_name] = self
-        # Also add it to the package builders tests collection.
-        PACKAGE_BUILDER_TESTS[self.package_builder].append(self)
-
-    @property
-    def unique_name(self) -> str:
-        """
-        The unique name of the package test. It contains information about all specifics that the test has.
-        """
-        return f"{self.package_builder.name}_{self._base_name}".replace("-", "_")
+    # @property
+    # def unique_name(self) -> str:
+    #     """
+    #     The unique name of the package test. It contains information about all specifics that the test has.
+    #     """
+    #     return f"{self.package_builder.name}_{self._base_name}".replace("-", "_")
 
 
 class DockerImagePackageTest(Test):
@@ -107,13 +83,15 @@ class DockerImagePackageTest(Test):
     Test for the agent docker images.
     """
 
+    DOCKER_IMAGE_BUILDER: DockerImageBuilder
+
     def __init__(
         self,
-        target_image_architectures: List[constants.Architecture],
-        base_name: str,
-        package_builder: package_builders.ContainerPackageBuilder,
-        additional_deployment_steps: List[Type[deployments.DeploymentStep]] = None,
-        deployment_architecture: constants.Architecture = None,
+        # base_name: str,
+        # package_builder_cls: Type[package_builders.ContainerPackageBuilder],
+        scalyr_api_key: str,
+        name_suffix: str = None,
+        target_image_architectures: List[constants.Architecture] = None
     ):
         """
         :param target_image_architectures: List of architectures in which to perform the image tests.
@@ -125,27 +103,25 @@ class DockerImagePackageTest(Test):
             by default it is an architecture of the package builder.
         """
 
-        self.target_image_architecture = target_image_architectures
+        super().__init__()
 
-        super().__init__(
-            base_name,
-            package_builder,
-            additional_deployment_steps,
-            deployment_architecture=deployment_architecture,
-        )
+        if target_image_architectures:
+            self.target_image_architecture = target_image_architectures
+        else:
+            self.target_image_architecture = [
+                Architecture.X86_64,
+                Architecture.ARM64,
+                Architecture.ARMV7
+            ]
 
-        # Do the trick to help to static analyser.
-        self.package_builder: package_builders.ContainerPackageBuilder = package_builder
+        self.scalyr_api_key = scalyr_api_key
+        self.name_suffix = name_suffix
 
-    @property
-    def unique_name(self) -> str:
-        return self._base_name
+    # @property
+    # def unique_name(self) -> str:
+    #     return self._base_name
 
-    def run_test(
-        self,
-        scalyr_api_key: str,
-        name_suffix: str = None,
-    ):
+    def run_test(self):
         """
         Run test for the agent docker image.
         First of all it builds an image, then pushes it to the local registry and does full test.
@@ -162,6 +138,8 @@ class DockerImagePackageTest(Test):
 
         registry_host = "localhost:5050"
 
+        builder_cls = type(self).DOCKER_IMAGE_BUILDER
+
         def _test_pushed_image():
 
             # Test that all tags has been pushed to the registry.
@@ -170,7 +148,7 @@ class DockerImagePackageTest(Test):
                     f"Test that the tag '{tag}' is pushed to the registry '{registry_host}'"
                 )
 
-                for image_name in self.package_builder.RESULT_IMAGE_NAMES:
+                for image_name in builder_cls.RESULT_IMAGE_NAMES:
                     full_image_name = f"{registry_host}/{image_name}:{tag}"
 
                     # Remove the local image first, if exists.
@@ -203,13 +181,13 @@ class DockerImagePackageTest(Test):
                         )
 
                     # Check if the tested image contains needed distribution.
-                    if "debian" in self.unique_name:
+                    if "debian" in type(self).NAME:
                         expected_os_name = "debian"
-                    elif "alpine" in self.unique_name:
+                    elif "alpine" in type(self).NAME:
                         expected_os_name = "alpine"
                     else:
                         raise AssertionError(
-                            f"Test {self.unique_name} does not contain os name (bullseye or alpine)"
+                            f"Test {type(self).NAME} does not contain os name (bullseye or alpine)"
                         )
 
                     # Get the content of the 'os-release' file from the image and verify the distribution name.
@@ -241,7 +219,7 @@ class DockerImagePackageTest(Test):
 
             # Use any of variants of the image name to test it.
             local_registry_image_name = (
-                f"{registry_host}/{self.package_builder.RESULT_IMAGE_NAMES[0]}"
+                f"{registry_host}/{builder_cls.RESULT_IMAGE_NAMES[0]}"
             )
 
             # Start the tests for each architecture.
@@ -252,19 +230,19 @@ class DockerImagePackageTest(Test):
                     f"'{arch.as_docker_platform.value}'"
                 )
 
-                if isinstance(self.package_builder, package_builders.K8sPackageBuilder):
+                if "k8s" in builder_cls.NAME:
                     k8s_test.run(
                         image_name=local_registry_image_name,
                         architecture=arch,
-                        scalyr_api_key=scalyr_api_key,
-                        name_suffix=name_suffix,
+                        scalyr_api_key=self.scalyr_api_key,
+                        name_suffix=self.name_suffix,
                     )
                 else:
                     docker_test.run(
                         image_name=local_registry_image_name,
                         architecture=arch,
-                        scalyr_api_key=scalyr_api_key,
-                        name_suffix=name_suffix,
+                        scalyr_api_key=self.scalyr_api_key,
+                        name_suffix=self.name_suffix,
                     )
 
         try:
@@ -277,7 +255,7 @@ class DockerImagePackageTest(Test):
                     [
                         sys.executable,
                         "build_package_new.py",
-                        self.package_builder.name,
+                        type(self).DOCKER_IMAGE_BUILDER.NAME,
                         "--registry",
                         registry_host,
                         "--tag",
@@ -299,38 +277,26 @@ class DockerImagePackageTest(Test):
             subprocess.check_call(["docker", "image", "prune", "-f"])
 
 
+DOCKER_IMAGE_TESTS = {}
 # Create tests for the all docker images (json/syslog/api) and for k8s image.
-_docker_image_tests = []
-for builder in [
-    package_builders.DOCKER_JSON_CONTAINER_BUILDER_DEBIAN,
-    package_builders.DOCKER_SYSLOG_CONTAINER_BUILDER_DEBIAN,
-    package_builders.DOCKER_API_CONTAINER_BUILDER_DEBIAN,
-    package_builders.K8S_CONTAINER_BUILDER_DEBIAN,
-    package_builders.DOCKER_JSON_CONTAINER_BUILDER_ALPINE,
-    package_builders.DOCKER_SYSLOG_CONTAINER_BUILDER_ALPINE,
-    package_builders.DOCKER_API_CONTAINER_BUILDER_ALPINE,
-    package_builders.K8S_CONTAINER_BUILDER_ALPINE,
-]:
-    test = DockerImagePackageTest(
-        base_name=f"{builder.name}_test",
+for builder_name, builder_cls in DOCKER_IMAGE_PACKAGE_BUILDERS.items():
+    class ImagePackageTest(DockerImagePackageTest):
+        NAME = f"{builder_name}_test"
         # Specify the builder that has to build the image.
-        package_builder=builder,
+        DOCKER_IMAGE_BUILDER = builder_cls
         # Specify which architectures of the result image has to be tested.
-        target_image_architectures=[
-            constants.Architecture.X86_64,
-            constants.Architecture.ARM64,
-            constants.Architecture.ARMV7,
-        ],
-    )
-    _docker_image_tests.append(test)
 
-(
-    DOCKER_JSON_TEST_DEBIAN,
-    DOCKER_SYSLOG_TEST_DEBIAN,
-    DOCKER_API_TEST_DEBIAN,
-    K8S_TEST_DEBIAN,
-    DOCKER_JSON_TEST_ALPINE,
-    DOCKER_SYSLOG_TEST_ALPINE,
-    DOCKER_API_TEST_ALPINE,
-    K8S_TEST_ALPINE,
-) = _docker_image_tests
+    DOCKER_IMAGE_TESTS[ImagePackageTest.NAME] = ImagePackageTest
+
+ALL_PACKAGE_TESTS.update(DOCKER_IMAGE_TESTS)
+
+# (
+#     DOCKER_JSON_TEST_DEBIAN,
+#     DOCKER_SYSLOG_TEST_DEBIAN,
+#     DOCKER_API_TEST_DEBIAN,
+#     K8S_TEST_DEBIAN,
+#     DOCKER_JSON_TEST_ALPINE,
+#     DOCKER_SYSLOG_TEST_ALPINE,
+#     DOCKER_API_TEST_ALPINE,
+#     K8S_TEST_ALPINE,
+# ) = _docker_image_tests

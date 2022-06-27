@@ -233,22 +233,19 @@ class PackageBuilder(abc.ABC):
         """
 
         # Build right here.
-        if locally or not self.deployment.in_docker:
+        if locally:
             self._build()
             return
 
         # Build in docker.
 
-        # First make sure that the deployment with needed images are ready.
-        self.deployment.deploy()
-
         # To perform the build in docker we have to run the build_package.py script once more but in docker.
-        build_package_script_path = pl.Path("/scalyr-agent-2/build_package.py")
+        build_package_script_path = pl.Path("/scalyr-agent-2/build_package_new.py")
 
         command_args = [
             "python3",
             str(build_package_script_path),
-            self.name,
+            self.NAME,
             "--output-dir",
             "/tmp/build",
             # Do not forget to specify this flag to avoid infinite docker build recursion.
@@ -258,13 +255,13 @@ class PackageBuilder(abc.ABC):
         command = shlex.join(command_args)  # pylint: disable=no-member
 
         # Run the docker build inside the result image of the deployment.
-        base_image_name = self.deployment.result_image_name.lower()
+        base_image_name = self.result_image_name.lower()
 
         build_in_docker.build_stage(
             command=command,
             stage_name="build",
             architecture=self.architecture,
-            image_name=f"agent-builder-{self.name}-{base_image_name}".lower(),
+            image_name=f"agent-builder-{self.NAME}-{base_image_name}".lower(),
             base_image_name=base_image_name,
             output_path_mappings={self._build_output_path: pl.Path("/tmp/build")},
         )
@@ -840,38 +837,38 @@ class ContainerPackageBuilder(LinuxFhsBasedPackageBuilder):
 
         registry_data_path = self.base_image_deployment_step.output_directory / "output_registry"
 
-        if not common.IN_CICD:
-            # If there's not a CI/CD then the deployment has to be done explicitly.
-            # If there is an CI/CD, then the deployment has to be already done.
-
-            # The ready deployment is required because it builds the base image of our result image.
-
-            # Prepare the deployment output directory and also remove previous one, if exists.
-            if registry_data_path.is_dir():
-                try:
-                    shutil.rmtree(registry_data_path)
-                except PermissionError as e:
-                    if e.errno == 13:
-                        # NOTE: Depends on the uid user for the registry inside the container, /var/lib/registry
-                        # inside the container and as such host directory will be owned by root. This is not
-                        # great, but that's just a quick workaround.
-                        # Better solution would be for the registry image to suppport setting uid and gid for
-                        # that directory to the current user or applying 777 permissions + umask to that
-                        # directory.
-                        # Just a safe guard to ensure that data path is local to this directory so
-                        # we don't accidentally delete system stuff.
-                        cwd = os.getcwd()
-                        assert str(registry_data_path).startswith(
-                            str(self.output_path)
-                        )
-                        assert str(registry_data_path).startswith(cwd)
-                        common.check_output_with_log(
-                            ["sudo", "rm", "-rf", str(registry_data_path)]
-                        )
-                    else:
-                        raise e
-
-            self._run_deployment_steps()
+        # if not common.IN_CICD:
+        #     # If there's not a CI/CD then the deployment has to be done explicitly.
+        #     # If there is an CI/CD, then the deployment has to be already done.
+        #
+        #     # The ready deployment is required because it builds the base image of our result image.
+        #
+        #     # Prepare the deployment output directory and also remove previous one, if exists.
+        #     if registry_data_path.is_dir():
+        #         try:
+        #             shutil.rmtree(registry_data_path)
+        #         except PermissionError as e:
+        #             if e.errno == 13:
+        #                 # NOTE: Depends on the uid user for the registry inside the container, /var/lib/registry
+        #                 # inside the container and as such host directory will be owned by root. This is not
+        #                 # great, but that's just a quick workaround.
+        #                 # Better solution would be for the registry image to suppport setting uid and gid for
+        #                 # that directory to the current user or applying 777 permissions + umask to that
+        #                 # directory.
+        #                 # Just a safe guard to ensure that data path is local to this directory so
+        #                 # we don't accidentally delete system stuff.
+        #                 cwd = os.getcwd()
+        #                 assert str(registry_data_path).startswith(
+        #                     str(self.output_path)
+        #                 )
+        #                 assert str(registry_data_path).startswith(cwd)
+        #                 common.check_output_with_log(
+        #                     ["sudo", "rm", "-rf", str(registry_data_path)]
+        #                 )
+        #             else:
+        #                 raise e
+        #
+        #     self._run_deployment_steps()
 
         # Create docker buildx builder instance. # Without it the result image won't be pushed correctly
         # to the local registry.

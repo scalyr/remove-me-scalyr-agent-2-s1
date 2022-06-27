@@ -12,6 +12,7 @@ __SOURCE_ROOT__ = pl.Path(__file__).parent.parent.parent.absolute()
 sys.path.append(str(__SOURCE_ROOT__))
 
 from tests.package_tests import all_package_tests
+from tests.package_tests.all_package_tests import DOCKER_IMAGE_TESTS
 
 
 _TEST_CONFIG_PATH = pl.Path(__file__).parent / "credentials.json"
@@ -101,19 +102,21 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.command == "list":
-        names = [t.unique_name for t in all_package_tests.ALL_PACKAGE_TESTS.values()]
+        names = [t.NAME for t in all_package_tests.ALL_PACKAGE_TESTS.values()]
         for test_name in sorted(names):
             print(test_name)
 
     if args.command == "package-test":
-        package_test = all_package_tests.ALL_PACKAGE_TESTS[args.package_test_name]
+        package_test_cls = all_package_tests.ALL_PACKAGE_TESTS[args.package_test_name]
         scalyr_api_key = get_option("scalyr_api_key", args.scalyr_api_key)
 
-        if isinstance(package_test, all_package_tests.DockerImagePackageTest):
-            package_test.run_test(
+        if args.package_test_name in DOCKER_IMAGE_TESTS:
+            package_test_cls = DOCKER_IMAGE_TESTS[args.package_test_name]
+            package_test = package_test_cls(
                 scalyr_api_key=scalyr_api_key,
                 name_suffix=get_option(
                     "name_suffix", default=str(datetime.datetime.now().timestamp())
                 ),
             )
+            package_test.run_test()
         exit(0)
