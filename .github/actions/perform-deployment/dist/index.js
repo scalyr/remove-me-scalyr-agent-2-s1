@@ -58046,6 +58046,7 @@ async function performDeployment() {
 
     // Run through deployment names and look if the is any existing cache for them.
     for (let name of deployment_cache_names) {
+        console.log(name);
         cacheHits[name] = await checkAndGetCache(
             name,
             cacheDir,
@@ -58064,6 +58065,7 @@ async function performDeployment() {
     // Run through the cache folder and save any cached directory within, that is not yet cached.
     const filenames = fs.readdirSync(cacheDir);
     for (const name of filenames) {
+        console.log(name);
         await checkAndSaveCache(
             name,
             cacheDir,
