@@ -121,6 +121,11 @@ def recursively_delete_dirs_by_name(root_dir: Union[str, pl.Path], *dir_names: s
                     break
 
 
+class CacheableStepsRunner:
+    NAME: str
+    CACHEABLE_DEPLOYMENT_STEPS: List[DeploymentStep] = []
+
+
 class PackageBuilder(abc.ABC):
     """
         Base abstraction for all Scalyr agent package builders. it can perform build of the package directly on the
@@ -155,8 +160,6 @@ class PackageBuilder(abc.ABC):
 
     # Monitors that are no included to to the build. Makes effect only with frozen binaries.
     EXCLUDED_MONITORS = []
-
-    CACHEABLE_DEPLOYMENT_STEPS: List[DeploymentStep] = []
 
     def __init__(
         self,
@@ -1129,7 +1132,7 @@ for distro_name in ["debian", "alpine"]:
         PackageType.DOCKER_API,
         PackageType.K8S
     ]:
-        class DockerImageBuilder(ContainerPackageBuilder):
+        class DockerImageBuilder(ContainerPackageBuilder, CacheableStepsRunner):
             NAME = f"{agent_package_type.value}-{distro_name}"
             PACKAGE_TYPE = agent_package_type
             CONFIG_PATH = _CONFIGS_PATH / f"{agent_package_type.value}-config"
@@ -1186,8 +1189,15 @@ class DebPackageBuilder(FpmBasedPackageBuilder):
 #     base_docker_image="centos:6"
 # )
 
-ALL_PACKAGE_BUILDERS: Dict[str, Type["PackageBuilder"]] = {
-    **DOCKER_IMAGE_PACKAGE_BUILDERS
+
+class BuildTestEnvironment(CacheableStepsRunner):
+    NAME = "test_environment"
+    CACHEABLE_DEPLOYMENT_STEPS = [deployments.INSTALL_TEST_REQUIREMENT_STEP]
+
+
+ALL_PACKAGE_BUILDERS: Dict[str, Type["CacheableStepsRunner"]] = {
+    **DOCKER_IMAGE_PACKAGE_BUILDERS,
+    BuildTestEnvironment.NAME: BuildTestEnvironment
 }
 
 ALL_DEPLOYMENT_STEPS = {

@@ -623,6 +623,12 @@ class InstallTestRequirementsDeploymentStep(ShellScriptDeploymentStep):
         return globs
 
 
+INSTALL_TEST_REQUIREMENT_STEP = InstallTestRequirementsDeploymentStep(
+    name="install_test_requirements",
+    architecture=Architecture.UNKNOWN
+)
+
+
 _REL_DOCKER_BASE_IMAGE_STEP_PATH = _REL_DEPLOYMENT_STEPS_PATH / "docker-base-images"
 _REL_AGENT_BUILD_DOCKER_PATH = _REL_AGENT_BUILD_PATH / "docker"
 

@@ -27,7 +27,7 @@ from tests.package_tests.internals import docker_test, k8s_test
 from agent_build.tools.environment_deployments import deployments
 from agent_build.tools import build_in_docker
 from agent_build.tools import common
-from agent_build.package_builders import DOCKER_IMAGE_PACKAGE_BUILDERS, PackageBuilder, DockerImageBuilder
+from agent_build.package_builders import DOCKER_IMAGE_PACKAGE_BUILDERS, PackageBuilder, DockerImageBuilder, CacheableStepsRunner
 from agent_build.tools.environment_deployments.deployments import DeploymentStep
 from agent_build.tools.constants import Architecture
 
@@ -280,11 +280,12 @@ class DockerImagePackageTest(Test):
 DOCKER_IMAGE_TESTS = {}
 # Create tests for the all docker images (json/syslog/api) and for k8s image.
 for builder_name, builder_cls in DOCKER_IMAGE_PACKAGE_BUILDERS.items():
-    class ImagePackageTest(DockerImagePackageTest):
+    class ImagePackageTest(DockerImagePackageTest, CacheableStepsRunner):
         NAME = f"{builder_name}_test"
         # Specify the builder that has to build the image.
         DOCKER_IMAGE_BUILDER = builder_cls
         # Specify which architectures of the result image has to be tested.
+        CACHEABLE_DEPLOYMENT_STEPS = [*builder_cls.CACHEABLE_DEPLOYMENT_STEPS]
 
     DOCKER_IMAGE_TESTS[ImagePackageTest.NAME] = ImagePackageTest
 
