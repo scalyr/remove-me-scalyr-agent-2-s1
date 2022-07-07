@@ -140,7 +140,7 @@ async function performDeployment() {
     // has to reuse them.
     child_process.execFileSync(
         "python3",
-        [deployment_helper_script_path, deploymentName, "deploy"],
+        [deployment_helper_script_path, deploymentName, "--run_all_cacheable_steps"],
         {stdio: 'inherit'}
     );
 
