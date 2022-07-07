@@ -86,6 +86,7 @@ class DockerImagePackageTest(CacheableBuilder):
         BuilderInput(
             name="--scalyr-api-key",
             dest="scalyr_api_key",
+            env_aware=True
         ),
         BuilderInput(
             name="--name-suffix",

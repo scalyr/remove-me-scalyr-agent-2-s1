@@ -784,6 +784,7 @@ class BuilderInput:
     default: Any = None
     required: bool = None
     help: str = None
+    env_aware: Union[bool, str] = False
 
 
 
@@ -984,8 +985,12 @@ class CacheableBuilder:
         input_values = {}
         for i in cls.INPUT:
             value = getattr(args, i.dest)
-            if not value:
-                value = os.environ.get(i.dest)
+            if not value and i.env_aware:
+                if isinstance(i.env_aware, str):
+                    env_name = i.env_aware
+                else:
+                    env_name = i.dest.upper()
+                value = os.environ.get(env_name)
             if not value and config:
                 value = config.get(i.dest)
 
