@@ -1,5 +1,13 @@
 import argparse
+import sys
+import pathlib as pl
 from typing import Dict, Type
+
+SOURCE_ROOT = pl.Path(__file__).parent.parent.parent
+# This file can be executed as script. Add source root to the PYTHONPATH in order to be able to import
+# local packages. All such imports also have to be done after that.
+sys.path.append(str(SOURCE_ROOT))
+
 
 from agent_build.package_builders import ALL_BUILDERS
 from agent_build.tools.environment_deployments.deployments import CacheableBuilder

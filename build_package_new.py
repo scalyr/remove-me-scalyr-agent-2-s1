@@ -34,7 +34,7 @@ sys.path.append(str(__SOURCE_ROOT__))
 from agent_build.tools import common
 from agent_build.tools import constants
 from agent_build import package_builders
-from agent_build.package_builders import ALL_BUILDERS, DOCKER_IMAGE_PACKAGE_BUILDERS, FPM_BASED_BUILDERS
+from agent_build.package_builders import ALL_PACKAGE_BUILDERS, DOCKER_IMAGE_PACKAGE_BUILDERS, FPM_BASED_BUILDERS
 from agent_build.scripts.builder_helper import run_builder_from_command_line
 
 _AGENT_BUILD_PATH = __SOURCE_ROOT__ / "agent_build"
@@ -44,7 +44,7 @@ common.init_logging()
 
 if __name__ == "__main__":
 
-    run_builder_from_command_line(possible_builders=ALL_BUILDERS)
+    run_builder_from_command_line(possible_builders=ALL_PACKAGE_BUILDERS)
 
 
 
