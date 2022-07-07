@@ -12,7 +12,10 @@ __SOURCE_ROOT__ = pl.Path(__file__).parent.parent.parent.absolute()
 sys.path.append(str(__SOURCE_ROOT__))
 
 from tests.package_tests import all_package_tests
-from tests.package_tests.all_package_tests import DOCKER_IMAGE_TESTS
+from tests.package_tests.all_package_tests import DOCKER_IMAGE_TESTS, ALL_PACKAGE_TESTS
+from agent_build.scripts.builder_helper import run_builder_from_command_line
+from agent_build.package_builders import ALL_BUILDERS
+from agent_build.tools.environment_deployments.deployments import BuilderInput
 
 
 _TEST_CONFIG_PATH = pl.Path(__file__).parent / "credentials.json"
@@ -59,6 +62,18 @@ if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO, format="[%(levelname)s][%(module)s] %(message)s"
     )
+
+    ALL_BUILDERS_WITH_TESTS = {
+        **ALL_BUILDERS,
+        **ALL_PACKAGE_TESTS
+    }
+
+    run_builder_from_command_line(
+        ALL_BUILDERS_WITH_TESTS,
+        config=config
+    )
+
+    exit(0)
 
     parser = argparse.ArgumentParser()
 

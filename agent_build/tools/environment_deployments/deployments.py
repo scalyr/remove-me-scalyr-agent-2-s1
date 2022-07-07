@@ -25,7 +25,7 @@ import re
 import shutil
 import subprocess
 import logging
-from typing import Union, Optional, List, Dict, Type, Any
+from typing import Union, Optional, List, Dict, Type, Any, Callable
 
 from agent_build.tools import common
 from agent_build.tools import constants
@@ -976,10 +976,19 @@ class CacheableBuilder:
         )
 
     @classmethod
-    def handle_command_line_arguments(cls, args):
+    def handle_command_line_arguments(
+            cls,
+            args,
+            config: Dict = None
+    ):
         input_values = {}
         for i in cls.INPUT:
             value = getattr(args, i.dest)
+            if not value:
+                value = os.environ.get(i.dest)
+            if not value and config:
+                value = config.get(i.dest)
+
             input_values[i.dest] = value
 
         if args.get_all_cacheable_steps:

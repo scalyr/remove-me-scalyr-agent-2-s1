@@ -28,7 +28,7 @@ from agent_build.tools.environment_deployments import deployments
 from agent_build.tools import build_in_docker
 from agent_build.tools import common
 from agent_build.package_builders import DOCKER_IMAGE_PACKAGE_BUILDERS, PackageBuilder, DockerImageBuilder, CacheableBuilder, BuildTestEnvironment
-from agent_build.tools.environment_deployments.deployments import DeploymentStep
+from agent_build.tools.environment_deployments.deployments import DeploymentStep, BuilderInput
 from agent_build.tools.constants import Architecture
 
 _PARENT_DIR = pl.Path(__file__).parent
@@ -36,7 +36,7 @@ __SOURCE_ROOT__ = _PARENT_DIR.parent.parent.absolute()
 
 # The global collection of all test. It is used by CI aimed scripts in order to be able to perform those test just
 # by knowing the name of needed test.
-ALL_PACKAGE_TESTS: Dict[str, Type["Test"]] = {}
+ALL_PACKAGE_TESTS: Dict[str, Type['DockerImagePackageTest']] = {}
 
 # Maps package test of some package to the builder of this package. Also needed for the GitHub Actions CI to
 # create a job matrix for a particular package tests.
@@ -78,50 +78,69 @@ class Test:
     #     return f"{self.package_builder.name}_{self._base_name}".replace("-", "_")
 
 
-class DockerImagePackageTest(Test):
+class DockerImagePackageTest(CacheableBuilder):
     """
     Test for the agent docker images.
     """
+    INPUT = [
+        BuilderInput(
+            name="--scalyr-api-key",
+            dest="scalyr_api_key",
+        ),
+        BuilderInput(
+            name="--name-suffix",
+            dest="name_suffix"
+        )
+    ]
 
     DOCKER_IMAGE_BUILDER: DockerImageBuilder
 
-    def __init__(
-        self,
-        # base_name: str,
-        # package_builder_cls: Type[package_builders.ContainerPackageBuilder],
-        scalyr_api_key: str,
-        name_suffix: str = None,
-        target_image_architectures: List[constants.Architecture] = None
-    ):
-        """
-        :param target_image_architectures: List of architectures in which to perform the image tests.
-        :param base_name: Base name of the test.
-        :param package_builder: Builder instance to build the image.
-        :param additional_deployment_steps: Additional deployment steps that may be needed to perform the test.
-            They are additionally performed after the deployment steps of the package builder.
-        :param deployment_architecture: Architecture of the machine where the test's deployment has to be perform.
-            by default it is an architecture of the package builder.
-        """
+    # def __init__(
+    #     self,
+    #     # base_name: str,
+    #     # package_builder_cls: Type[package_builders.ContainerPackageBuilder],
+    #     scalyr_api_key: str,
+    #     name_suffix: str = None,
+    #     target_image_architectures: List[constants.Architecture] = None
+    # ):
+    #     """
+    #     :param target_image_architectures: List of architectures in which to perform the image tests.
+    #     :param base_name: Base name of the test.
+    #     :param package_builder: Builder instance to build the image.
+    #     :param additional_deployment_steps: Additional deployment steps that may be needed to perform the test.
+    #         They are additionally performed after the deployment steps of the package builder.
+    #     :param deployment_architecture: Architecture of the machine where the test's deployment has to be perform.
+    #         by default it is an architecture of the package builder.
+    #     """
+    #
+    #     super().__init__()
+    #
+    #     if target_image_architectures:
+    #         self.target_image_architecture = target_image_architectures
+    #     else:
+    #         self.target_image_architecture = [
+    #             Architecture.X86_64,
+    #             Architecture.ARM64,
+    #             Architecture.ARMV7
+    #         ]
+    #
+    #     self.scalyr_api_key = scalyr_api_key
+    #     self.name_suffix = name_suffix
+    #
+    # # @property
+    # # def unique_name(self) -> str:
+    # #     return self._base_name
+    def _initialize(self):
 
-        super().__init__()
+        self.scalyr_api_key = self._input_values["scalyr_api_key"]
+        self.name_suffix = self._input_values["name_suffix"]
+        self.target_image_architecture = [
+            Architecture.X86_64,
+            Architecture.ARM64,
+            Architecture.ARMV7
+        ]
 
-        if target_image_architectures:
-            self.target_image_architecture = target_image_architectures
-        else:
-            self.target_image_architecture = [
-                Architecture.X86_64,
-                Architecture.ARM64,
-                Architecture.ARMV7
-            ]
-
-        self.scalyr_api_key = scalyr_api_key
-        self.name_suffix = name_suffix
-
-    # @property
-    # def unique_name(self) -> str:
-    #     return self._base_name
-
-    def run_test(self):
+    def _build(self):
         """
         Run test for the agent docker image.
         First of all it builds an image, then pushes it to the local registry and does full test.
