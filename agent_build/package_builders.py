@@ -1838,9 +1838,9 @@ for arch in [
     })
 
 
-class BuildTestEnvironment(CacheableStepsRunner):
+class BuildTestEnvironment(CacheableBuilder):
     NAME = "test_environment"
-    CACHEABLE_DEPLOYMENT_STEPS = [deployments.INSTALL_TEST_REQUIREMENT_STEP]
+    DEPLOYMENT_STEP = deployments.INSTALL_TEST_REQUIREMENT_STEP
 
 
 ALL_PACKAGE_BUILDERS = {
