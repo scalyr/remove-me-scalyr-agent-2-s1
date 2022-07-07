@@ -13,6 +13,53 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# {{ check-python }} # this placeholder has to replaced during the build with a functions that checks python version.
+
+# Return success if the current symlinks point to a valid Python interpreter (2.7, or >= 3.5)
+is_current_python_valid() {
+  # Parse currently used python command from the shebang from currently configured main script.
+  # shellcheck disable=SC2155
+  local command=$(cat /usr/share/scalyr-agent-2/bin/scalyr-agent-2 | head -n1 | grep -Eo "python[0-9]")
+  local exit_code=$?
+  # Get version of the current used Python.
+  if [[ -z "${command}" || "${exit_code}" -ne "0" ]]; then return 1; fi
+  # shellcheck disable=SC2155
+  local current_version=$(/usr/share/scalyr-agent-2/bin/scalyr-agent-2-config --report-python-version | grep -Eo "[0-9](.[0-9]+)+");
+  exit_code=$?
+  if [[ -z "${current_version}" || "${exit_code}" -ne "0" ]]; then return 1; fi
+  is_python_valid "$command" "$current_version"
+}
+
+switch_python() {
+  local python_bin_name=$1
+
+  # Verify that a suitable Python version is available and set up the agent symlinks
+  if is_python_valid "$python_bin_name" ; then
+    echo "+ The Scalyr Agent will use the default system $python_bin_name binary (/usr/bin/env $python_bin_name)."
+    /usr/share/scalyr-agent-2/bin/scalyr-switch-python "$python_bin_name"
+    return 0
+  fi
+
+  return 1
+}
+
+check_python_version() {
+  # Check to see if the current symlink setup points to a valid python interpreter.  If we are already good, then
+  # we do not need to change anything.  This handles the case where a customer may have already changed the symlink
+  # to something like python3 (as long as it is valid, we do not tweak it).
+  if is_current_python_valid; then
+    return 0
+  fi
+
+  echo ". Trying to switch the Python interpreter for the Scalyr Agent."
+
+  # Verify that a suitable Python version is available and set up the agent symlinks
+  if switch_python "python" || switch_python "python2" || switch_python "python3" ; then
+    return 0
+  fi
+
+  echo "Warning, no valid Python interpreter found."
+}
 
 # Function which ensures that the provided file path permissions for "group" match the
 # provided permission bit in octal notation.
@@ -94,6 +141,8 @@ ensure_path_not_readable_by_others() {
   file_path=$1
   ensure_path_other_permissions "${file_path}" "0"
 }
+
+check_python_version
 
 config_owner=$(stat -c %U /etc/scalyr-agent-2/agent.json)
 script_owner=$(stat -c %U /usr/share/scalyr-agent-2/bin/scalyr-agent-2)

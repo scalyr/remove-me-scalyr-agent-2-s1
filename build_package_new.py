@@ -34,7 +34,8 @@ sys.path.append(str(__SOURCE_ROOT__))
 from agent_build.tools import common
 from agent_build.tools import constants
 from agent_build import package_builders
-from agent_build.package_builders import ALL_PACKAGE_BUILDERS, DOCKER_IMAGE_PACKAGE_BUILDERS
+from agent_build.package_builders import ALL_BUILDERS, DOCKER_IMAGE_PACKAGE_BUILDERS, FPM_BASED_BUILDERS
+from agent_build.scripts.builder_helper import run_builder_from_command_line
 
 _AGENT_BUILD_PATH = __SOURCE_ROOT__ / "agent_build"
 
@@ -43,14 +44,20 @@ common.init_logging()
 
 if __name__ == "__main__":
 
+    run_builder_from_command_line(possible_builders=ALL_BUILDERS)
+
+
+
+    exit(0)
+
     parser = argparse.ArgumentParser()
 
     # Add subparsers for all packages except docker builders.
     subparsers = parser.add_subparsers(dest="package_name", required=True)
 
-    all_package_builders = {}
 
-    for builder_name, builder_cls in ALL_PACKAGE_BUILDERS.items():
+
+    for builder_name, builder_cls in ALL_BUILDERS.items():
         package_parser = subparsers.add_parser(name=builder_name)
 
         # Define argument for all packages
@@ -155,7 +162,7 @@ if __name__ == "__main__":
 
     # Find the builder class.
     builder_name = args.package_name
-    package_builder = package_builders.ALL_PACKAGE_BUILDERS[builder_name]
+    package_builder = package_builders.ALL_BUILDERS[builder_name]
 
     # If that's a docker image builder handle their arguments too.
     if builder_name in DOCKER_IMAGE_PACKAGE_BUILDERS:
@@ -184,7 +191,9 @@ if __name__ == "__main__":
         package_builder.build()
         exit(0)
 
-    # if isinstance(package_builder, package_builders.FpmBasedPackageBuilder):
-    #     # package_builder.build()
+    if builder_name in FPM_BASED_BUILDERS:
+        builder_cls = FPM_BASED_BUILDERS[builder_name]
+        package_builder = builder_cls()
+        package_builder.build()
 
     #package_builder.build(locally=args.locally)

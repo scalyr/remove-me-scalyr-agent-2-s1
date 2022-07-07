@@ -58030,12 +58030,12 @@ async function performDeployment() {
     }
 
     // Get json list with names of all deployments which are needed for this deployment.
-    const deployment_helper_script_path = path.join("agent_build", "scripts", "run_deployment.py")
+    const deployment_helper_script_path = path.join("agent_build", "scripts", "builder_helper.py")
     // Run special github-related helper command which returns names for all deployments, which are used in the current
     // deployment.
     const code = child_process.execFileSync(
         "python3",
-        [deployment_helper_script_path, "deployment", deploymentName, "get-deployment-all-cache-names"]
+        [deployment_helper_script_path, deploymentName, "--get-all-cacheable-steps"]
     );
 
     // Read and decode names from json.
@@ -58058,7 +58058,7 @@ async function performDeployment() {
     // has to reuse them.
     child_process.execFileSync(
         "python3",
-        [deployment_helper_script_path, "deployment", deploymentName, "deploy"],
+        [deployment_helper_script_path, deploymentName, "deploy"],
         {stdio: 'inherit'}
     );
 

@@ -49,7 +49,7 @@ class ExampleStep(deployments.ShellScriptDeploymentStep):
 @pytest.fixture
 def example_deployment(request):
 
-    if request.param == "in_docker":
+    if request.param == "runs_in_docker":
         name = "example_environment_in_docker"
         # This is the same example of the deployment by that run in docker. It is used only for tests.
         deployment = deployments.Deployment(
@@ -78,7 +78,7 @@ def in_ci_cd(request):
 
 
 @pytest.mark.parametrize(
-    ["example_deployment"], [["locally"], ["in_docker"]], indirect=True
+    ["example_deployment"], [["locally"], ["runs_in_docker"]], indirect=True
 )
 @pytest.mark.parametrize(["in_ci_cd"], [[True]], indirect=True)
 def test_example_deployment(example_deployment: deployments.Deployment, in_ci_cd: bool):

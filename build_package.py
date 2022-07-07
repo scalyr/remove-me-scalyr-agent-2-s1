@@ -1485,7 +1485,7 @@ def create_scriptlets():
     These are the preinstall.sh, preuninstall.sh, and postuninstall.sh scripts.
     """
 
-    scripts_path = os.path.join(__source_root__, "installer", "scripts")
+    scripts_path = os.path.join(__source_root__, "installer", "scripts_legacy")
 
     shutil.copy(os.path.join(scripts_path, "preuninstall.sh"), "preuninstall.sh")
 

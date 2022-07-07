@@ -15,8 +15,7 @@
 """
 This module defines all possible packages of the Scalyr Agent and how they can be built.
 """
-
-
+import argparse
 import json
 import pathlib as pl
 import shlex
@@ -38,7 +37,9 @@ from agent_build.tools.environment_deployments import deployments
 from agent_build.tools import build_in_docker
 from agent_build.tools import common
 from agent_build.tools.constants import Architecture, PackageType
-from agent_build.tools.environment_deployments.deployments import ShellScriptDeploymentStep, DeploymentStep
+from agent_build.tools.environment_deployments.deployments import ShellScriptDeploymentStep, DeploymentStep, CacheableBuilder, BuilderInput
+from agent_build.prepare_agent_filesystem import build_linux_lfs_agent_files, get_install_info, create_change_logs
+from agent_build.tools.constants import SOURCE_ROOT
 
 
 __PARENT_DIR__ = pl.Path(__file__).absolute().parent
@@ -234,6 +235,8 @@ class PackageBuilder(abc.ABC):
         :param locally: Force builder to build the package on the current system, even if meant to be done inside
             docker. This is needed to avoid loop when it is already inside the docker.
         """
+
+
 
         # Build right here.
         if locally:
@@ -689,7 +692,12 @@ class LinuxFhsBasedPackageBuilder(LinuxPackageBuilder):
             binary_symlink_path.symlink_to(symlink_target_path)
 
 
-class ContainerPackageBuilder(LinuxFhsBasedPackageBuilder):
+class AgentPackageBuilder(CacheableBuilder):
+    def _initialize(self):
+        self._package_root_path = self.output_path / "package_root"
+
+
+class ContainerPackageBuilder(AgentPackageBuilder):
     """
     The base builder for all docker and kubernetes based images . It builds an executable script in the current working
      directory that will build the container image for the various Docker and Kubernetes targets.
@@ -698,57 +706,116 @@ class ContainerPackageBuilder(LinuxFhsBasedPackageBuilder):
     """
     # Path to the configuration which should be used in this build.
     CONFIG_PATH = None
-    USE_FROZEN_BINARIES = False
 
     # Names of the result image that goes to dockerhub.
     RESULT_IMAGE_NAMES: List[str]
 
-    FILE_GLOBS_USED_IN_IMAGE_BUILD: List[pl.Path] = []
+    BASE_IMAGE_BUILDER_STEP: deployments.ShellScriptDeploymentStep
 
-    BASE_IMAGE_BUILDER_STEP = deployments.BuildDockerBaseImageStep
+    INPUT = [
+        BuilderInput(
+            name="--only-filesystem-tarball",
+            dest="only_filesystem_tarball",
+            required=False,
+            help="Build only the tarball with the filesystem of the agent. This argument has to accept"
+                 "path to the directory where the tarball is meant to be built. "
+                 "Used by the Dockerfile itself and does not required for the manual build.",
+        ),
+        BuilderInput(
+            name="--registry",
+            dest="registry",
+            help="Registry (or repository) name where to push the result image.",
+        ),
+        BuilderInput(
+            name="--user",
+            dest="user",
+            help="User name prefix for the image name."
+        ),
+        BuilderInput(
+            name="--tag",
+            dest="tag",
+            action="append",
+            help="The tag that will be applied to every registry that is specified. Can be used multiple times.",
+        ),
+        BuilderInput(
+            name="--push",
+            dest="push",
+            action="store_true",
+            help="Push the result docker image."
+        ),
+        BuilderInput(
+            name="--use-test-version",
+            dest="use_test_version",
+            action="store_true",
+            default=False,
+            help="Build a special version of image with additional measuring tools (such as coverage). "
+                 "Used only for testing.",
+        ),
+        BuilderInput(
+            name="--platforms",
+            dest="platforms",
+            help="Comma delimited list of platforms to build (and optionally push) the image for.",
+        )
+    ]
 
-    def __init__(
-        self,
-        image_names=None,
-        registry: str = None,
-        user: str = None,
-        tags: List[str] = None,
-        push: bool = False,
-        use_test_version: bool = False,
-        platforms: List[str] = None
-    ):
-        """
-        :param config_path: Path to the configuration directory which will be copied to the image.
-        :param variant: Adds the specified string into the package's iteration name. This may be None if no additional
-        tweak to the name is required. This is used to produce different packages even for the same package type (such
-        as 'rpm').
-        :param no_versioned_file_name:  True if the version number should not be embedded in the artifact's file name.
-        """
+    # def __init__(
+    #     self,
+    #     # image_names=None,
+    #     # registry: str = None,
+    #     # user: str = None,
+    #     # tags: List[str] = None,
+    #     # push: bool = False,
+    #     # use_test_version: bool = False,
+    #     # platforms: List[str] = None,
+    # ):
+    #     """
+    #     :param config_path: Path to the configuration directory which will be copied to the image.
+    #     :param variant: Adds the specified string into the package's iteration name. This may be None if no additional
+    #     tweak to the name is required. This is used to produce different packages even for the same package type (such
+    #     as 'rpm').
+    #     :param no_versioned_file_name:  True if the version number should not be embedded in the artifact's file name.
+    #     """
+    #     # self.use_test_version = use_test_version
+    #     # self.image_names = image_names
+    #     # self.registry = registry
+    #     # self.user = user
+    #     # self.tags = tags
+    #     # self.push = push
+    #
+    #     super(ContainerPackageBuilder, self).__init__(
+    #         required_deployment_steps=[self.base_image_deployment_step]
+    #     )
+
+    def _initialize(self):
         self._name = type(self).NAME
         self.config_path = type(self).CONFIG_PATH
 
         self.dockerfile_path = __SOURCE_ROOT__ / "agent_build/docker/Dockerfile"
-        self.use_test_version = use_test_version
-        self.image_names = image_names
-        self.registry = registry
-        self.user = user
-        self.tags = tags
-        self.push = push
 
         base_image_deployment_step = type(self).BASE_IMAGE_BUILDER_STEP
+
+        self.use_test_version = self._input_values["use_test_version"]
+        self.registry = self._input_values["registry"]
+        self.tags = self._input_values["tag"]
+        self.user = self._input_values["user"]
+        self.push = self._input_values["push"]
+
+        self.only_filesystem_tarball = self._input_values["only_filesystem_tarball"]
+        if self.only_filesystem_tarball:
+            self.only_filesystem_tarball = pl.Path(self._input_values["only_filesystem_tarball"])
+
+        platforms = self._input_values["platforms"]
         if platforms is None:
             self.base_image_deployment_step = base_image_deployment_step
             self.platforms = self.base_image_deployment_step.platforms
         else:
             self.platforms = platforms
             self.base_image_deployment_step = type(base_image_deployment_step)(
+                name="agent-docker-base-image-custom",
                 platforms=platforms
             )
 
-        super(ContainerPackageBuilder, self).__init__(
-            architecture=constants.Architecture.UNKNOWN,
-            deployment_steps=[self.base_image_deployment_step],
-        )
+        super(ContainerPackageBuilder, self)._initialize()
 
     @property
     def name(self) -> str:
@@ -756,26 +823,21 @@ class ContainerPackageBuilder(LinuxFhsBasedPackageBuilder):
         # Dockerfile represents a different builder
         return self._name
 
-    def _run_deployment_steps(self):
-        for step in self.deployment_steps:
-            step.run()
-
     def _build_package_files(self):
-        super(ContainerPackageBuilder, self)._build_package_files()
+
+        build_linux_lfs_agent_files(
+            copy_agent_source=True,
+            output_path=self._package_root_path,
+            config_path=type(self).CONFIG_PATH
+        )
 
         # Need to create some docker specific directories.
         pl.Path(self._package_root_path / "var/log/scalyr-agent-2/containers").mkdir()
 
-        # Copy config
-        self._add_config(
-            config_source_path=self.config_path,
-            output_path=self._package_root_path / "etc/scalyr-agent-2",
-        )
-
-    def _build(self):
+    def build_filesystem_tarball(self):
         self._build_package_files()
 
-        container_tarball_path = self._build_output_path / "scalyr-agent.tar.gz"
+        container_tarball_path = self.output_path / "scalyr-agent.tar.gz"
 
         # Do a manual walk over the contents of root so that we can use `addfile` to add the tarfile... which allows
         # us to reset the owner/group to root.  This might not be that portable to Windows, but for now, Docker is
@@ -804,14 +866,10 @@ class ContainerPackageBuilder(LinuxFhsBasedPackageBuilder):
                     else:
                         container_tar.addfile(file_entry)
 
-    def build_filesystem_tarball(self, output_path: pl.Path):
-        super(ContainerPackageBuilder, self).build(locally=True)
+        self.only_filesystem_tarball.parent.mkdir(exist_ok=True, parents=True)
+        shutil.copy2(container_tarball_path, self.only_filesystem_tarball)
 
-        # Also copy result tarball to the given path.
-        output_path.parent.mkdir(exist_ok=True, parents=True)
-        shutil.copy2(self._build_output_path / "scalyr-agent.tar.gz", output_path)
-
-    def build(self, locally: bool = False):
+    def _build(self, locally: bool = False):
         """
         This function builds Agent docker image by using the specified dockerfile (defaults to "Dockerfile").
         It passes to dockerfile its own package type through docker build arguments, so the same package builder
@@ -837,6 +895,10 @@ class ContainerPackageBuilder(LinuxFhsBasedPackageBuilder):
             'coverage' library). Must not be enabled in production images.
         :param platforms: List of platform names to build the image for.
         """
+
+        if self.only_filesystem_tarball:
+            self.build_filesystem_tarball()
+            return
 
         registry_data_path = self.base_image_deployment_step.output_directory / "output_registry"
 
@@ -941,8 +1003,7 @@ class ContainerPackageBuilder(LinuxFhsBasedPackageBuilder):
 
         tag_options = []
 
-        image_names = self.image_names or type(self).RESULT_IMAGE_NAMES
-
+        image_names = type(self).RESULT_IMAGE_NAMES[:]
         for image_name in image_names:
 
             full_name = image_name
@@ -1030,6 +1091,215 @@ class ContainerPackageBuilder(LinuxFhsBasedPackageBuilder):
                 debug=True,
             )
 
+    # @classmethod
+    # def handle_command_line_arguments2(cls, argv=None):
+    #     parser = argparse.ArgumentParser()
+    #
+    #     # Define argument for all packages
+    #     parser.add_argument(
+    #         "--locally",
+    #         action="store_true",
+    #         help="Perform the build on the current system which runs the script. Without that, some packages may be built "
+    #              "by default inside the docker.",
+    #     )
+    #
+    #     parser.add_argument(
+    #         "--no-versioned-file-name",
+    #         action="store_true",
+    #         dest="no_versioned_file_name",
+    #         default=False,
+    #         help="If true, will not embed the version number in the artifact's file name.  This only "
+    #              "applies to the `tarball` and container builders artifacts.",
+    #     )
+    #
+    #     parser.add_argument(
+    #         "-v",
+    #         "--variant",
+    #         dest="variant",
+    #         default=None,
+    #         help="An optional string that is included in the package name to identify a variant "
+    #              "of the main release created by a different packager.  "
+    #              "Most users do not need to use this option.",
+    #     )
+    #
+    #     parser.add_argument(
+    #         "--debug",
+    #         action="store_true",
+    #         help="Enable debug mode with additional logging.",
+    #     )
+    #
+    #     parser.add_argument(
+    #         "--only-filesystem-tarball",
+    #         dest="only_filesystem_tarball",
+    #         help="Build only the tarball with the filesystem of the agent. This argument has to accept"
+    #              "path to the directory where the tarball is meant to be built. "
+    #              "Used by the Dockerfile itself and does not required for the manual build.",
+    #     )
+    #
+    #     parser.add_argument(
+    #         "--registry",
+    #         help="Registry (or repository) name where to push the result image.",
+    #     )
+    #
+    #     parser.add_argument(
+    #         "--user", help="User name prefix for the image name."
+    #     )
+    #
+    #     parser.add_argument(
+    #         "--tag",
+    #         action="append",
+    #         help="The tag that will be applied to every registry that is specified. Can be used multiple times.",
+    #     )
+    #
+    #     parser.add_argument(
+    #         "--push", action="store_true", help="Push the result docker image."
+    #     )
+    #
+    #     parser.add_argument(
+    #         "--coverage",
+    #         dest="coverage",
+    #         action="store_true",
+    #         default=False,
+    #         help="Enable coverage analysis. Can be used in smoketests. Only works with docker/k8s.",
+    #     )
+    #
+    #     parser.add_argument(
+    #         "--platforms",
+    #         dest="platforms",
+    #         help="Comma delimited list of platforms to build (and optionally push) the image for.",
+    #     )
+    #
+    #     if argv is None:
+    #         argv = sys.argv[:]
+    #
+    #     args = parser.parse_args(args=argv)
+    #
+    #     if args.platforms:
+    #         platforms = args.platforms.split(",")
+    #     else:
+    #         platforms = None
+    #
+    #     package_builder = cls(
+    #         push=args.push,
+    #         registry=args.registry,
+    #         user=args.user,
+    #         tags=args.tag or [],
+    #         use_test_version=args.coverage,
+    #         platforms=platforms
+    #     )
+    #     if args.only_filesystem_tarball:
+    #         # Build only image filesystem.
+    #         package_builder.build_filesystem_tarball(
+    #             output_path=pl.Path(args.only_filesystem_tarball)
+    #         )
+    #         exit(0)
+    #
+    #     package_builder.build()
+    #     exit(0)
+
+    # @classmethod
+    # def add_command_line_arguments33(cls, parser):
+    #
+    #     # Define argument for all packages
+    #     parser.add_argument(
+    #         "--locally",
+    #         action="store_true",
+    #         help="Perform the build on the current system which runs the script. Without that, some packages may be built "
+    #              "by default inside the docker.",
+    #     )
+    #
+    #     parser.add_argument(
+    #         "--no-versioned-file-name",
+    #         action="store_true",
+    #         dest="no_versioned_file_name",
+    #         default=False,
+    #         help="If true, will not embed the version number in the artifact's file name.  This only "
+    #              "applies to the `tarball` and container builders artifacts.",
+    #     )
+    #
+    #     parser.add_argument(
+    #         "-v",
+    #         "--variant",
+    #         dest="variant",
+    #         default=None,
+    #         help="An optional string that is included in the package name to identify a variant "
+    #              "of the main release created by a different packager.  "
+    #              "Most users do not need to use this option.",
+    #     )
+    #
+    #     parser.add_argument(
+    #         "--debug",
+    #         action="store_true",
+    #         help="Enable debug mode with additional logging.",
+    #     )
+    #
+    #     parser.add_argument(
+    #         "--only-filesystem-tarball",
+    #         dest="only_filesystem_tarball",
+    #         help="Build only the tarball with the filesystem of the agent. This argument has to accept"
+    #              "path to the directory where the tarball is meant to be built. "
+    #              "Used by the Dockerfile itself and does not required for the manual build.",
+    #     )
+    #
+    #     parser.add_argument(
+    #         "--registry",
+    #         help="Registry (or repository) name where to push the result image.",
+    #     )
+    #
+    #     parser.add_argument(
+    #         "--user", help="User name prefix for the image name."
+    #     )
+    #
+    #     parser.add_argument(
+    #         "--tag",
+    #         action="append",
+    #         help="The tag that will be applied to every registry that is specified. Can be used multiple times.",
+    #     )
+    #
+    #     parser.add_argument(
+    #         "--push", action="store_true", help="Push the result docker image."
+    #     )
+    #
+    #     parser.add_argument(
+    #         "--coverage",
+    #         dest="coverage",
+    #         action="store_true",
+    #         default=False,
+    #         help="Enable coverage analysis. Can be used in smoketests. Only works with docker/k8s.",
+    #     )
+    #
+    #     parser.add_argument(
+    #         "--platforms",
+    #         dest="platforms",
+    #         help="Comma delimited list of platforms to build (and optionally push) the image for.",
+    #     )
+    # @classmethod
+    # def handle_command_line_arguments44(cls, args):
+    #
+    #     if args.platforms:
+    #         platforms = args.platforms.split(",")
+    #     else:
+    #         platforms = None
+    #
+    #     package_builder = cls(
+    #         push=args.push,
+    #         registry=args.registry,
+    #         user=args.user,
+    #         tags=args.tag or [],
+    #         use_test_version=args.coverage,
+    #         platforms=platforms
+    #     )
+    #     if args.only_filesystem_tarball:
+    #         # Build only image filesystem.
+    #         package_builder.build_filesystem_tarball(
+    #             output_path=pl.Path(args.only_filesystem_tarball)
+    #         )
+    #         exit(0)
+    #
+    #     package_builder.build()
+    #     exit(0)
+
+
 
 # class K8sPackageBuilder(ContainerPackageBuilder):
 #     """
@@ -1077,7 +1347,6 @@ class ContainerPackageBuilder(LinuxFhsBasedPackageBuilder):
 
 
 _CONFIGS_PATH = __SOURCE_ROOT__ / "docker"
-_AGENT_BUILD_DOCKER_PATH = constants.SOURCE_ROOT / "agent_build" / "docker"
 
 # DEBIAN_DOCKER_BASE_IMAGE_BUILD_STEP = deployments.BuildDebianDockerBaseImageStep(
 #     platforms=AGENT_DOCKER_IMAGE_SUPPORTED_PLATFORMS
@@ -1116,15 +1385,18 @@ _AGENT_DOCKER_IMAGES_RESULT_IMAGE_NAME = {
 }
 
 DOCKER_IMAGE_PACKAGE_BUILDERS = {}
+_AGENT_BUILD_DOCKER_PATH = _AGENT_BUILD_PATH / "docker"
+_AGENT_BUILD_DEPLOYMENT_STEPS_PATH = _AGENT_BUILD_PATH / "tools/environment_deployments/steps"
+_AGENT_BUILD_REQUIREMENTS_FILES_PATH = _AGENT_BUILD_PATH / "requirement-files"
 for distro_name in ["debian", "alpine"]:
 
     base_docker_image_step = deployments.BuildDockerBaseImageStep(
         name=f"agent-docker-base-image-{distro_name}",
         python_image_suffix=_DISTRO_TO_PYTHON_IMAGE_SUFFIX[distro_name],
-        platforms=_AGENT_DOCKER_IMAGE_SUPPORTED_PLATFORMS
+        platforms=_AGENT_DOCKER_IMAGE_SUPPORTED_PLATFORMS,
     )
 
-    ALL_DEPLOYMENT_STEPS_LIST.append(base_docker_image_step)
+    #ALL_DEPLOYMENT_STEPS_LIST.append(base_docker_image_step)
 
     for agent_package_type in [
         PackageType.DOCKER_JSON,
@@ -1132,62 +1404,438 @@ for distro_name in ["debian", "alpine"]:
         PackageType.DOCKER_API,
         PackageType.K8S
     ]:
-        class DockerImageBuilder(ContainerPackageBuilder, CacheableStepsRunner):
+        class DockerImageBuilder(ContainerPackageBuilder):
             NAME = f"{agent_package_type.value}-{distro_name}"
             PACKAGE_TYPE = agent_package_type
             CONFIG_PATH = _CONFIGS_PATH / f"{agent_package_type.value}-config"
             RESULT_IMAGE_NAMES = _AGENT_DOCKER_IMAGES_RESULT_IMAGE_NAME[agent_package_type.value]
-            BASE_IMAGE_BUILDER_STEP = base_docker_image_step
-            CACHEABLE_DEPLOYMENT_STEPS = [base_docker_image_step]
+            BASE_IMAGE_BUILDER_STEP = DEPLOYMENT_STEP = base_docker_image_step
 
         DOCKER_IMAGE_PACKAGE_BUILDERS[DockerImageBuilder.NAME] = DockerImageBuilder
 
 
-class BuildPythonBase(ShellScriptDeploymentStep):
-    @property
-    def script_path(self) -> pl.Path:
-        return pl.Path("agent_build/tools/environment_deployments/steps/prepare_python_base.sh")
+BUILD_PYTHON_BASE = ShellScriptDeploymentStep(
+    name="build_python_base",
+    script_path=pl.Path("agent_build/tools/environment_deployments/steps/frozen_binaries_prepare_base.sh"),
+    architecture=Architecture.X86_64,
+    previous_step="centos:6",
+    cacheable=True
+)
 
 
-class BuildPython(ShellScriptDeploymentStep):
-    def __init__(
-        self,
-        deployment: "Deployment",
-        architecture: constants.Architecture,
-        previous_step: Union[str, "DeploymentStep"] = None,
-    ):
-        super(BuildPython, self).__init__(
-            deployment=deployment,
-            architecture=architecture,
-            previous_step=previous_step
+# class BuildPython(ShellScriptDeploymentStep):
+#     CACHEABLE_STEPS = [BUILD_PYTHON_BASE]
+#     def __init__(
+#         self,
+#         name: str,
+#         architecture: constants.Architecture,
+#     ):
+#
+#         super(BuildPython, self).__init__(
+#             name=name,
+#             architecture=architecture,
+#             previous_step=BUILD_PYTHON_BASE,
+#             cacheable=True
+#         )
+#
+#     @property
+#     def script_path(self) -> pl.Path:
+#         return pl.Path("agent_build/tools/environment_deployments/steps/build_python.sh")
+
+
+BUILD_PYTHON_STEP = ShellScriptDeploymentStep(
+    name="build_python",
+    architecture=Architecture.X86_64,
+    script_path=pl.Path("agent_build/tools/environment_deployments/steps/frozen_binaries_build_python.sh"),
+    previous_step=BUILD_PYTHON_BASE,
+    cacheable=True
+)
+
+
+# class InstallAgentDependenciesStep(ShellScriptDeploymentStep):
+#     CACHEABLE_STEPS = [BUILD_PYTHON_STEP]
+#
+#     def __init__(
+#             self,
+#             name: str,
+#             architecture: constants.Architecture,
+#     ):
+#         super(InstallAgentDependenciesStep, self).__init__(
+#             name=name,
+#             architecture=architecture,
+#             previous_step=BUILD_PYTHON_STEP,
+#             cacheable=True
+#         )
+#
+#     @property
+#     def script_path(self) -> pl.Path:
+#         return pl.Path("agent_build/tools/environment_deployments/steps/install_agent_python-dependencies.sh")
+#
+#     @property
+#     def _tracked_file_globs(self) -> List[pl.Path]:
+#         globs = super(InstallAgentDependenciesStep, self)._tracked_file_globs
+#         globs.extend([
+#             pl.Path("agent_build/requirement-files/main-requirements.txt"),
+#             pl.Path("agent_build/requirement-files/compression-requirements.txt"),
+#             pl.Path("agent_build/requirement-files/frozen-binaries-requirements.txt")
+#         ])
+#         return globs
+
+
+INSTALL_AGENT_DEPENDENCIES_STEP = ShellScriptDeploymentStep(
+    name="install_agent_dependencies",
+    architecture=Architecture.X86_64,
+    script_path=pl.Path(
+        "agent_build/tools/environment_deployments/steps/frozen_binaries_install_agent_python-dependencies.sh"
+    ),
+    tracked_file_globs=[
+        pl.Path("agent_build/requirement-files/main-requirements.txt"),
+        pl.Path("agent_build/requirement-files/compression-requirements.txt"),
+        pl.Path("agent_build/requirement-files/frozen-binaries-requirements.txt")
+    ],
+    previous_step=BUILD_PYTHON_STEP,
+    cacheable=True,
+)
+
+
+class BuildFrozenBinaryPython(CacheableBuilder):
+    NAME = "frozen_binary_builder"
+    DEPLOYMENT_STEP = INSTALL_AGENT_DEPENDENCIES_STEP
+
+    INPUT = [
+        BuilderInput(
+            name="--install_type",
+            dest="install_type"
         )
+    ]
 
-    @property
-    def script_path(self) -> pl.Path:
-        return pl.Path("agent_build/tools/environment_deployments/steps/build_python.sh")
-
-
-class FpmBasedPackageBuilder(LinuxFhsBasedPackageBuilder):
-
-    def _build_agent_install_root(self):
-        super(FpmBasedPackageBuilder, self)._build_agent_install_root()
-
-    def _build_package_files(self):
-        super(FpmBasedPackageBuilder, self)._build_package_files()
+    def _initialize(self):
+        self.install_type = self._input_values["install_type"]
 
     def _build(self):
-        pass
+        scalyr_agent_package_path = SOURCE_ROOT / "scalyr_agent"
 
-class DebPackageBuilder(FpmBasedPackageBuilder):
-    PACKAGE_TYPE = PackageType.DEB
-    USE_FROZEN_BINARIES = True
-    INSTALL_TYPE = "package"
+        # Add monitor modules as hidden imports, since they are not directly imported in the agent's code.
+        all_builtin_monitor_module_names = [
+            mod_path.stem
+            for mod_path in pl.Path(
+                SOURCE_ROOT, "scalyr_agent", "builtin_monitors"
+            ).glob("*.py")
+            if mod_path.stem != "__init__"
+        ]
 
-# DEB_PACKAGE_BUILDER = DebPackageBuilder(
-#     architecture=Architecture.X86_64,
-#     deployment_step_classes=[BuildPython],
-#     base_docker_image="centos:6"
-# )
+        # Define builtin monitors that have to be excluded from particular platform.
+        if platform.system().lower().startswith("linux"):
+            monitors_to_exclude = [
+                "scalyr_agent.builtin_monitors.windows_event_log_monitor",
+                "scalyr_agent.builtin_monitors.windows_system_metrics",
+                "scalyr_agent.builtin_monitors.windows_process_metrics",
+            ]
+        elif platform.system().lower().startswith("win"):
+            monitors_to_exclude = [
+                "scalyr_agent.builtin_monitors.linux_process_metrics.py",
+                "scalyr_agent.builtin_monitors.linux_system_metrics.py"
+            ]
+        else:
+            monitors_to_exclude = []
+
+        monitors_to_import = set(all_builtin_monitor_module_names) - set(monitors_to_exclude)
+
+        # # Add packages to frozen binary paths.
+        # paths_to_include = [
+        #     str(scalyr_agent_package_path),
+        #     str(scalyr_agent_package_path / "builtin_monitors"),
+        # ]
+        #
+        # # Add platform specific things.
+        # if platform.system().lower().startswith("linux"):
+        #     tcollectors_path = pl.Path(
+        #         source_root,
+        #         "scalyr_agent",
+        #         "third_party",
+        #         "tcollector",
+        #         "collectors",
+        #     )
+
+        agent_package_path = os.path.join(SOURCE_ROOT, "scalyr_agent")
+
+        instalL_info_path = self.output_path / "install_info.json"
+
+        install_info = get_install_info(
+            install_type=self.install_type
+        )
+
+        logging.critical(f"EEEE {install_info}")
+
+        instalL_info_path.write_text(json.dumps(install_info))
+        add_data = {instalL_info_path: "scalyr_agent"}
+
+        hidden_imports = [*monitors_to_import, "win32timezone"]
+
+        # Create --add-data options from previously added files.
+        add_data_options = []
+        for src, dest in add_data.items():
+            add_data_options.append("--add-data")
+            add_data_options.append("{}{}{}".format(src, os.path.pathsep, dest))
+
+        # Create --hidden-import options from previously created hidden imports list.
+        hidden_import_options = []
+        for h in hidden_imports:
+            hidden_import_options.append("--hidden-import")
+            hidden_import_options.append(str(h))
+
+        # paths_options = []
+        # for p in paths_to_include:
+        #     paths_options.extend(["--paths", p])
+
+        command = [
+            sys.executable,
+            "-m",
+            "PyInstaller",
+            "--onefile",
+            "-n",
+            "scalyr-agent-2",
+            os.path.join(agent_package_path, "agent_main.py"),
+        ]
+        command.extend(add_data_options)
+        command.extend(hidden_import_options)
+        # command.extend(paths_options)
+        command.extend(
+            [
+                "--exclude-module",
+                "asyncio",
+                "--exclude-module",
+                "FixTk",
+                "--exclude-module",
+                "tcl",
+                "--exclude-module",
+                "tk",
+                "--exclude-module",
+                "_tkinter",
+                "--exclude-module",
+                "tkinter",
+                "--exclude-module",
+                "Tkinter",
+                "--exclude-module",
+                "sqlite",
+            ]
+        )
+
+        pyinstaller_output = self.output_path / "pyinstaller"
+        pyinstaller_output.mkdir(parents=True)
+
+        subprocess.check_call(
+            command,
+            cwd=str(pyinstaller_output)
+        )
+
+        if platform.system().lower().startswith("win"):
+            frozen_binary_file_name = "scalyr-agent-2.exe"
+        else:
+            frozen_binary_file_name = "scalyr-agent-2"
+
+        frozen_binary_path = pyinstaller_output / "dist" / frozen_binary_file_name
+        # Make frozen binary executable.
+        frozen_binary_path.chmod(
+            frozen_binary_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP
+        )
+
+        shutil.copy2(
+            frozen_binary_path,
+            self.output_path / frozen_binary_file_name
+        )
+
+        subprocess.check_call(
+            f"ls {self.output_path}", shell=True
+        )
+
+
+# class PrepareFpmBuilder(ShellScriptDeploymentStep):
+#     def __init__(
+#         self,
+#         name: str,
+#         architecture: constants.Architecture,
+#     ):
+#
+#         super(PrepareFpmBuilder, self).__init__(
+#             name=name,
+#             architecture=architecture,
+#             previous_step="ubuntu:20.04",
+#             cacheable=True
+#         )
+#
+#     @property
+#     def script_path(self) -> pl.Path:
+#         return pl.Path("agent_build/tools/environment_deployments/steps/prepare_fpm_builder.sh")
+
+
+PREPARE_FPM_BUILDER = ShellScriptDeploymentStep(
+    name="fpm_builder",
+    architecture=Architecture.X86_64,
+    script_path=pl.Path("agent_build/tools/environment_deployments/steps/prepare_fpm_builder.sh"),
+    previous_step="ubuntu:20.04",
+    cacheable=True,
+)
+
+
+class FpmBasedPackageBuilder(AgentPackageBuilder):
+    ARCHITECTURE: Architecture
+    PACKAGE_TYPE: PackageType
+    REQUIRED_BUILDER_CLASSES = [BuildFrozenBinaryPython]
+    DEPLOYMENT_STEP = PREPARE_FPM_BUILDER
+
+    _FPM_PACKAGE_TYPES = {
+        PackageType.DEB: "deb",
+        PackageType.RPM: "rpm"
+    }
+    _FPM_ARCHITECTURES = {
+        PackageType.DEB: {
+            Architecture.X86_64: "amd64",
+            Architecture.ARM64: "arm64"
+        },
+        PackageType.RPM: {
+            Architecture.X86_64: "amd64",
+            Architecture.ARM64: "arm64"
+        }
+    }
+
+    INPUT = [
+        BuilderInput(
+            name="--variant",
+            dest="variant"
+        )
+    ]
+
+    def _initialize(self):
+        self.build_frozen_binary = BuildFrozenBinaryPython.create(
+            install_type="package",
+        )
+
+        self.variant = self._input_values["variant"]
+        self.required_builders = [self.build_frozen_binary]
+        super(FpmBasedPackageBuilder, self)._initialize()
+
+    def _build(self):
+
+        build_linux_lfs_agent_files(
+            copy_agent_source=False,
+            output_path=self._package_root_path,
+            config_path=SOURCE_ROOT / "config"
+        )
+
+        if self.variant is not None:
+            iteration_arg = "--iteration 1.%s" % self.variant
+        else:
+            iteration_arg = ""
+
+        install_scripts_path = SOURCE_ROOT / "installer/scripts"
+
+        # generate changelogs
+        changelogs_path = self.output_path / "package_changelogs"
+        create_change_logs(
+            output_directory=changelogs_path
+        )
+
+        description = (
+            "Scalyr Agent 2 is the daemon process Scalyr customers run on their servers to collect metrics and "
+            "log files and transmit them to Scalyr."
+        )
+
+        # filename = f"scalyr-agent-2_{self._package_version}_{arch}.{ext}"
+
+        version_file_path = SOURCE_ROOT / "VERSION"
+        package_version = version_file_path.read_text().strip()
+
+        cls = type(self)
+        fpm_architectures = cls._FPM_ARCHITECTURES[cls.PACKAGE_TYPE]
+        # fmt: off
+        fpm_command = [
+            "fpm",
+            "-s", "dir",
+            "-a", fpm_architectures[cls.ARCHITECTURE],
+            "-t", cls._FPM_PACKAGE_TYPES[cls.PACKAGE_TYPE],
+            "-n", "scalyr-agent-2",
+            "-v", package_version,
+            "--chdir", str(self._package_root_path),
+            "--license", "Apache 2.0",
+            "--vendor", f"Scalyr {iteration_arg}",
+            "--maintainer", "czerwin@scalyr.com",
+            "--provides", "scalyr-agent-2",
+            "--description", description,
+            "--depends", 'bash >= 3.2',
+            "--url", "https://www.scalyr.com",
+            "--deb-user", "root",
+            "--deb-group", "root",
+            "--deb-changelog", str(changelogs_path / 'changelog-deb'),
+            "--rpm-changelog", str(changelogs_path / 'changelog-rpm'),
+            "--rpm-user", "root",
+            "--rpm-group", "root",
+            "--after-install", str(install_scripts_path / 'postinstall.sh'),
+            "--before-remove", str(install_scripts_path / 'preuninstall.sh'),
+            "--deb-no-default-config-files",
+            "--no-deb-auto-config-files",
+            "--config-files", "/etc/scalyr-agent-2/agent.json",
+            "--directories", "/usr/share/scalyr-agent-2",
+            "--directories", "/var/lib/scalyr-agent-2",
+            "--directories", "/var/log/scalyr-agent-2",
+            # NOTE 1: By default fpm won't preserve all the permissions we set on the files so we need
+            # to use those flags.
+            # If we don't do that, fpm will use 77X for directories and we don't really want 7 for
+            # "group" and it also means config file permissions won't be correct.
+            # NOTE 2: This is commented out since it breaks builds produced on builder VM where
+            # build_package.py runs as rpmbuilder user (uid 1001) and that uid is preserved as file
+            # owner for the package tarball file which breaks things.
+            # On Circle CI uid of the user under which the package job runs is 0 aka root so it works
+            # fine.
+            # We don't run fpm as root on builder VM which means we can't use any other workaround.
+            # Commenting this flag out means that original file permissions (+ownership) won't be
+            # preserved which means we will also rely on postinst step fixing permissions for fresh /
+            # new installations since those permissions won't be correct in the package artifact itself.
+            # Not great.
+            # Once we move all the build steps to Circle CI and ensure build_package.py runs as uid 0
+            # we should uncomment this.
+            # In theory it should work wth --*-user fpm flag, but it doesn't. Keep in mind that the
+            # issue only applies to deb packages since --rpm-user and --rpm-root flag override the user
+            # even if the --rpm-use-file-permissions flag is used.
+            # "  --rpm-use-file-permissions "
+            "--rpm-use-file-permissions",
+            "--deb-use-file-permissions",
+            # NOTE: Sadly we can't use defattrdir since it breakes permissions for some other
+            # directories such as /etc/init.d and we need to handle that in postinst :/
+            # "  --rpm-auto-add-directories "
+            # "  --rpm-defattrfile 640"
+            # "  --rpm-defattrdir 751"
+            # "  -C root usr etc var",
+        ]
+        # fmt: on
+
+        # Run fpm command and build the package.
+        subprocess.check_call(
+            fpm_command,
+            cwd=str(self.output_path),
+        )
+
+
+FPM_BASED_BUILDERS = {}
+for arch in [
+    Architecture.X86_64
+]:
+    class DebPackageBuilder(FpmBasedPackageBuilder):
+        NAME = f"deb_{arch.value}"
+        ARCHITECTURE = arch
+        PACKAGE_TYPE = PackageType.DEB
+        INSTALL_TYPE = "package"
+
+    class RpmPackageBuilder(FpmBasedPackageBuilder):
+        NAME = f"rpm_{arch.value}"
+        ARCHITECTURE = arch
+        PACKAGE_TYPE = PackageType.RPM
+        INSTALL_TYPE = "package"
+
+    FPM_BASED_BUILDERS.update({
+        DebPackageBuilder.NAME: DebPackageBuilder,
+        RpmPackageBuilder.NAME: RpmPackageBuilder
+    })
 
 
 class BuildTestEnvironment(CacheableStepsRunner):
@@ -1195,9 +1843,15 @@ class BuildTestEnvironment(CacheableStepsRunner):
     CACHEABLE_DEPLOYMENT_STEPS = [deployments.INSTALL_TEST_REQUIREMENT_STEP]
 
 
-ALL_PACKAGE_BUILDERS: Dict[str, Type["CacheableStepsRunner"]] = {
+ALL_PACKAGE_BUILDERS = {
     **DOCKER_IMAGE_PACKAGE_BUILDERS,
-    BuildTestEnvironment.NAME: BuildTestEnvironment
+    **FPM_BASED_BUILDERS
+}
+
+ALL_BUILDERS: Dict[str, Type["CacheableBuilder"]] = {
+    **ALL_PACKAGE_BUILDERS,
+    BuildTestEnvironment.NAME: BuildTestEnvironment,
+    BuildFrozenBinaryPython.NAME: BuildFrozenBinaryPython
 }
 
 ALL_DEPLOYMENT_STEPS = {

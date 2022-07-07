@@ -18,6 +18,24 @@
 # In this cases script have to exit with an error.
 # This is important because all agent scripts rely on '/usr/bin/env python' command.
 
+# {{ check-python }} # this placeholder has to replaced during the build with a functions that checks python version.
+
+if ! is_python_valid "python" && ! is_python_valid "python2" && ! is_python_valid "python3" ; then
+  echo "! Suitable Python interpreter not found."
+  # get 'ID_LIKE' and 'ID' fields from '/etc/os-release' file and then search for distributions key words.
+  if [[ -f "/etc/os-release" ]]; then
+    echo "You can install it by running command:"
+    found_distros=$(grep -E "^ID_LIKE=|^ID=" /etc/os-release)
+    # debian and etc.
+    if echo "${found_distros}" | grep -qE "debian|ubuntu"; then
+      echo -e "'apt install python'\nor\n'apt install python3"
+    # RHEL and etc.
+    elif echo "${found_distros}" | grep -qE "rhel|centos|fedora"; then
+      echo -e "'yum install python2'\nor\n'yum install python3'"
+    fi
+  fi
+  exit 1
+fi
 
 # Always remove the .pyc files and __pycache__ directories.  This covers problems for old packages that didn't have the remove in the
 # preuninstall.sh script.
