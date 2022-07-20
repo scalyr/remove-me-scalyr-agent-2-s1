@@ -184,6 +184,9 @@ jobs:
           ./scripts/cicd/scalyr-query.sh '$serverHost="'${SCALYR_AGENT_POD_NAME}'" $logfile="/var/log/scalyr-agent-2/kubernetes_events.log" "involvedObject"'
           ./scripts/cicd/scalyr-query.sh '$serverHost="'${SCALYR_AGENT_POD_NAME}'" $logfile="/var/log/scalyr-agent-2/kubernetes_events.log" "NodeReady"'
 
+          agent_status=$(kubectl exec -i "$APP_POD_NAME" --container scalyr-agent -- scalyr-agent-2 status -v)
+          echo "$agent_status"
+
       - name: Notify Slack on Failure
         # NOTE: github.ref is set to pr ref (and not branch name, e.g. refs/pull/28/merge) for pull
         # requests and that's why we need this special conditional and check for github.head_ref in
