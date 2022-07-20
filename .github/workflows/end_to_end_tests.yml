@@ -3,10 +3,10 @@ name: "Kubernetes End to End Tests"
 on:
   push:
     branches:
-      - master
+      - arthur/new-checks
   pull_request:
     branches:
-      - master
+      - arthur/new-checks
   schedule:
     - cron: '0 4 * * *'
 
