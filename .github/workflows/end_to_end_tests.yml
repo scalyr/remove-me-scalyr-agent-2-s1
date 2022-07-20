@@ -184,7 +184,7 @@ jobs:
           ./scripts/cicd/scalyr-query.sh '$serverHost="'${SCALYR_AGENT_POD_NAME}'" $logfile="/var/log/scalyr-agent-2/kubernetes_events.log" "involvedObject"'
           ./scripts/cicd/scalyr-query.sh '$serverHost="'${SCALYR_AGENT_POD_NAME}'" $logfile="/var/log/scalyr-agent-2/kubernetes_events.log" "NodeReady"'
 
-          agent_status=$(kubectl exec -i ${SCALYR_AGENT_POD_NAME} --container scalyr-agent -- scalyr-agent-2 status -v)
+          agent_status=$(kubectl --namespace=scalyr exec -i ${SCALYR_AGENT_POD_NAME} --container scalyr-agent -- scalyr-agent-2 status -v)
           echo "$agent_status"
 
       - name: Notify Slack on Failure
