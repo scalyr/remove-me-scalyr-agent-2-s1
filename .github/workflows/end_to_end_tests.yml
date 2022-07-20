@@ -179,10 +179,10 @@ jobs:
           echo ""
 
           # Verify Kubernetes Events Monitor events are ingested
-          ./scripts/cicd/scalyr-query.sh '$serverHost="'${SCALYR_AGENT_POD_NAME}'" $logfile="/var/log/scalyr-agent-2/kubernetes_events.log" "\"kind\":\"Event\""'
-          ./scripts/cicd/scalyr-query.sh '$serverHost="'${SCALYR_AGENT_POD_NAME}'" $logfile="/var/log/scalyr-agent-2/kubernetes_events.log" "\"kind\":\"Pod\""'
-          ./scripts/cicd/scalyr-query.sh '$serverHost="'${SCALYR_AGENT_POD_NAME}'" $logfile="/var/log/scalyr-agent-2/kubernetes_events.log" "involvedObject"'
-          ./scripts/cicd/scalyr-query.sh '$serverHost="'${SCALYR_AGENT_POD_NAME}'" $logfile="/var/log/scalyr-agent-2/kubernetes_events.log" "NodeReady"'
+          ./scripts/cicd/scalyr-query.sh '$serverHost="'${SCALYR_AGENT_POD_NAME}'" $logfile="/var/log/scalyr-agent-2/kubernetes_events.log" $parser="k8sEvents" "\"kind\":\"Event\""'
+          ./scripts/cicd/scalyr-query.sh '$serverHost="'${SCALYR_AGENT_POD_NAME}'" $logfile="/var/log/scalyr-agent-2/kubernetes_events.log" $parser="k8sEvents" "\"kind\":\"Pod\""'
+          ./scripts/cicd/scalyr-query.sh '$serverHost="'${SCALYR_AGENT_POD_NAME}'" $logfile="/var/log/scalyr-agent-2/kubernetes_events.log" $parser="k8sEvents" "involvedObject"'
+          ./scripts/cicd/scalyr-query.sh '$serverHost="'${SCALYR_AGENT_POD_NAME}'" $logfile="/var/log/scalyr-agent-2/kubernetes_events.log" $parser="k8sEvents" "NodeReady"'
 
           agent_status=$(kubectl --namespace=scalyr exec -i ${SCALYR_AGENT_POD_NAME} --container scalyr-agent -- scalyr-agent-2 status -v)
           echo "$agent_status"
