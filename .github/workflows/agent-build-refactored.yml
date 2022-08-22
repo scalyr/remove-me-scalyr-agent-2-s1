@@ -50,9 +50,9 @@ jobs:
           images-to-build: |
             [
               { "name": "docker-json-debian", "basic": true },
-              { "name": "docker-syslog-debian" "basic": true },
-              { "name": "docker-api-debian" "basic": true },
-              { "name": "k8s-debian" "basic": true },
+              { "name": "docker-syslog-debian", "basic": true },
+              { "name": "docker-api-debian", "basic": true },
+              { "name": "k8s-debian", "basic": true },
               { "name": "docker-json-alpine" },
               { "name": "docker-syslog-alpine" },
               { "name": "docker-api-alpine" },
