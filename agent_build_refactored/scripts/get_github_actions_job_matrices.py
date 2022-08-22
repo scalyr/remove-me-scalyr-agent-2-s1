@@ -23,14 +23,14 @@ import json
 import os
 import sys
 import pathlib as pl
-from typing import List, Type
+from typing import List, Type, Dict
 
 # This file can be executed as script. Add source root to the PYTHONPATH in order to be able to import
 # local packages. All such imports also have to be done after that.
 sys.path.append(str(pl.Path(__file__).parent.parent.parent))
 
 from agent_build_refactored.tools.constants import SOURCE_ROOT
-from agent_build_refactored.tools.runner import Runner
+from agent_build_refactored.tools.runner import Runner, RunnerStep
 from agent_build_refactored.docker_image_builders import IMAGES_PYTHON_VERSION
 
 from agent_build_refactored.docker_image_builders import (
@@ -65,57 +65,41 @@ elif GITHUB_EVENT_NAME == "push" and GITHUB_REF_TYPE == "tag":
     if GITHUB_REF_NAME == f"v{current_version}":
         limited_run = False
 
-# Set collection of builders that will be used during the CI/Cd workflow run.
 
-# if limited_run:
-#     used_image_builders = DEBIAN_IMAGE_BUILDERS[:]
-# else:
-#     used_image_builders = list(ALL_IMAGE_BUILDERS.values())
-
-# agent_images_build_matrix = {"include": []}
-# for builder_cls in used_image_builders:
-#     agent_images_build_matrix["include"].append(
-#         {
-#             "builder-name": builder_cls.get_name(),
-#             "builder-fqdn": builder_cls.get_fully_qualified_name(),
-#             "python-version": f"{IMAGES_PYTHON_VERSION}",
-#             "os": "ubuntu-20.04",
-#         }
-#     )
+ALL_USED_RUNNERS = {
+    **ALL_IMAGE_BUILDERS
+}
 
 
-def _get_all_pre_build_step_jobx_matrix(used_builders: List[Type[Runner]]):
-    # Search for all steps that are used by all used runners.
-    _all_used_runner_steps = {}
-    for runner_cls in used_builders:
+def _get_runners_all_pre_built_steps(runners: List[Type[Runner]]) -> Dict[str, RunnerStep]:
+    # Search for all steps that are used by given runners.
+    _all_runner_steps = {}
+    for runner_cls in runners:
         for step in runner_cls.get_all_cacheable_steps():
             if not step.github_actions_settings.pre_build_in_separate_job:
                 continue
-            _all_used_runner_steps[step.id] = step
+            _all_runner_steps[step.id] = step
+    return _all_runner_steps
 
-    pre_build_steps_matrix = {"include": []}
-    for step in _all_used_runner_steps.values():
-        # Create "dummy" Runner for each runner step that has to be pre-built, this dummy runner will be executed
-        # by its fqdn to run the step.
-        class StepWrapperRunner(Runner):
-            REQUIRED_STEPS = [step]
 
-        # Since this runner class is created dynamically we have to generate a constant fqdn for it.
-        StepWrapperRunner.assign_fully_qualified_name(
-            class_name="pre-built-",
-            module_name=__name__,
-            class_name_suffix=step.id,
-        )
-        pre_build_steps_matrix["include"].append(
-            {
-                "name": f"Pre-build: {StepWrapperRunner.REQUIRED_STEPS[0].name}",
-                "step-runner-fqdn": StepWrapperRunner.get_fully_qualified_name(),
-                "os": "ubuntu-20.04",
-                "python-version": "3.8.13",
-            }
-        )
+_all_used_runner_steps = _get_runners_all_pre_built_steps(
+    runners=list(ALL_USED_RUNNERS.values())
+)
 
-    return pre_build_steps_matrix
+_pre_built_step_runners = {}
+for step in _all_used_runner_steps.values():
+    # Create "dummy" Runner for each runner step that has to be pre-built, this dummy runner will be executed
+    # by its fqdn to run the step.
+    class StepWrapperRunner(Runner):
+        REQUIRED_STEPS = [step]
+
+    # Since this runner class is created dynamically we have to generate a constant fqdn for it.
+    StepWrapperRunner.assign_fully_qualified_name(
+        class_name="pre-built-",
+        module_name=__name__,
+        class_name_suffix=step.id,
+    )
+    _pre_built_step_runners[step.id] = StepWrapperRunner
 
 
 def main():
@@ -144,14 +128,12 @@ def main():
     args = parser.parse_args()
     images_build_matrix_json_file_path = pl.Path(args.images_build_matrix_json_file)
 
-    print(images_build_matrix_json_file_path.read_text(), file=sys.stderr)
-
     images_build_matrix = json.loads(
         images_build_matrix_json_file_path.read_text()
     )
 
     result_images_build_matrix = {"include": []}
-    used_builders = []
+    used_runners = []
 
     for job in images_build_matrix:
         is_basic = job.get("basic", False)
@@ -167,11 +149,28 @@ def main():
         builder = ALL_IMAGE_BUILDERS[builder_name]
         job["builder-fqdn"] = builder.get_fully_qualified_name()
         result_images_build_matrix["include"].append(job)
-        used_builders.append(builder)
+        used_runners.append(builder)
+
+    pre_built_steps = _get_runners_all_pre_built_steps(
+        runners=used_runners
+    )
+
+    pre_build_steps_matrix = {"include": []}
+
+    for pre_built_step in pre_built_steps.values():
+        pre_built_step_runner = _pre_built_step_runners[pre_built_step.id]
+        pre_build_steps_matrix["include"].append(
+            {
+                "name": f"Pre-build: {pre_built_step_runner.REQUIRED_STEPS[0].name}",
+                "step-runner-fqdn": pre_built_step_runner.get_fully_qualified_name(),
+                "os": "ubuntu-20.04",
+                "python-version": "3.8.13",
+            }
+        )
 
     all_matrices = {
         "agent_image_build_matrix": result_images_build_matrix,
-        "pre_build_steps_matrix": _get_all_pre_build_step_jobx_matrix(used_builders=used_builders)
+        "pre_build_steps_matrix": pre_build_steps_matrix
     }
 
     print(json.dumps(all_matrices))
