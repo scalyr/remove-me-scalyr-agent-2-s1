@@ -102,7 +102,7 @@ jobs:
 
 
   build-images:
-    name: Build image '${{ matrix.builder-name }}'.
+    name: Build image '${{ matrix.name }}'.
     needs:
       - pre-job
       - pre-build-cached-step
