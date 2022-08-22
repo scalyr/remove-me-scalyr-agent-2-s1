@@ -44,7 +44,7 @@ runs:
       run: |
 
         echo "Image pre-build steps job matrix: "
-        echo '${{ steps.get-job-matrices.outputs.agent_image_build_matrix_json }}' | jq --color-output
+        echo '${{ steps.get-job-matrices.outputs.pre_build_steps_matrix_json }}' | jq --color-output
         
         echo "Image build job matrix: "
-        echo '${{ steps.get-job-matrices.outputs.pre_build_steps_matrix_json }}' | jq --color-output
+        echo '${{ steps.get-job-matrices.outputs.agent_image_build_matrix_json }}' | jq --color-output

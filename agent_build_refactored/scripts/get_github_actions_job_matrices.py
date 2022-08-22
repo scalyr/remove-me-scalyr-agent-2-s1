@@ -157,9 +157,17 @@ def main():
         is_basic = job.get("basic", False)
         if not is_basic and limited_run:
             continue
-        result_images_build_matrix["include"].append(job)
+
+        if "os" not in job:
+            job["os"] = "ubuntu-20.04"
+        if "python-version" not in job:
+            job["python-version"] = IMAGES_PYTHON_VERSION
+
         builder_name = job["name"]
-        used_builders.append(ALL_IMAGE_BUILDERS[builder_name])
+        builder = ALL_IMAGE_BUILDERS[builder_name]
+        job["builder-fqdn"] = builder.get_fully_qualified_name()
+        result_images_build_matrix["include"].append(job)
+        used_builders.append(builder)
 
     all_matrices = {
         "agent_image_build_matrix": result_images_build_matrix,
