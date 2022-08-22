@@ -40,6 +40,7 @@ runs:
         echo "::set-output name=agent_image_build_matrix_json::$(cat /tmp/final_matrices.json | jq -c '.agent_image_build_matrix')"
 
     - name: "Print job matrices."
+      shell: bash
       run: |
 
         echo "Image pre-build steps job matrix: "
