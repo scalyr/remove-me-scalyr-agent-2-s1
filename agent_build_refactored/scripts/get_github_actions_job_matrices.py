@@ -14,9 +14,10 @@
 
 
 """
-This script generates job matrices for GitHub Actions. This is needed because we do a "full" run on GHA
-when we push on master or create a pull request, in other cases (e.g. just custom development branch)
-we just run limited set of tests to reduce number of jobs for active development phase.
+This script gets job matrices that are specified in the workflow and filters out jobs that are not supposed to be
+in the "limited" run - run which is not from 'master' branch or not from 'master'-targeted PR.
+
+It also generates matrix for job that have to run a special pre-built steps.
 """
 import argparse
 import json
@@ -34,7 +35,6 @@ from agent_build_refactored.tools.runner import Runner, RunnerStep
 from agent_build_refactored.docker_image_builders import IMAGES_PYTHON_VERSION
 
 from agent_build_refactored.docker_image_builders import (
-    DEBIAN_IMAGE_BUILDERS,
     ALL_IMAGE_BUILDERS,
 )
 
@@ -72,7 +72,10 @@ ALL_USED_RUNNERS = {
 
 
 def _get_runners_all_pre_built_steps(runners: List[Type[Runner]]) -> Dict[str, RunnerStep]:
-    # Search for all steps that are used by given runners.
+    """
+    Get collection of all RunnerSteps that are used by the Runners from the given list.
+    :return: Dict with all used RunnerSteps. Step ID - key, step - value.
+    """
     _all_runner_steps = {}
     for runner_cls in runners:
         for step in runner_cls.get_all_cacheable_steps():
@@ -82,10 +85,12 @@ def _get_runners_all_pre_built_steps(runners: List[Type[Runner]]) -> Dict[str, R
     return _all_runner_steps
 
 
+# Search for all steps that are used by given runners.
 _all_used_runner_steps = _get_runners_all_pre_built_steps(
     runners=list(ALL_USED_RUNNERS.values())
 )
 
+# Create runner for each found pre-built step.
 _pre_built_step_runners = {}
 for step in _all_used_runner_steps.values():
     # Create "dummy" Runner for each runner step that has to be pre-built, this dummy runner will be executed
@@ -103,7 +108,6 @@ for step in _all_used_runner_steps.values():
 
 
 def main():
-
     run_type_name = "limited" if limited_run else "full"
     print(
         f"Doing {run_type_name} workflow run.",
@@ -132,14 +136,19 @@ def main():
         images_build_matrix_json_file_path.read_text()
     )
 
-    result_images_build_matrix = {"include": []}
+    # List of all runners that are used by this workflow run.
     used_runners = []
 
+    # Generate a final agent image build job matrix and filter out job for non-limited run, if needed.
+    result_images_build_matrix = {"include": []}
     for job in images_build_matrix:
         is_basic = job.get("basic", False)
+
+        # Skip job which id not basic if run is not limited.
         if not is_basic and limited_run:
             continue
 
+        # Set default valued for some essential matrix values, if not specified.
         if "os" not in job:
             job["os"] = "ubuntu-20.04"
         if "python-version" not in job:
@@ -151,10 +160,10 @@ def main():
         result_images_build_matrix["include"].append(job)
         used_runners.append(builder)
 
+    # Get pre-built steps that are used by this workflow and create matrix for a pre-built steps.
     pre_built_steps = _get_runners_all_pre_built_steps(
         runners=used_runners
     )
-
     pre_build_steps_matrix = {"include": []}
 
     for pre_built_step in pre_built_steps.values():
