@@ -143,6 +143,9 @@ def main():
 
     args = parser.parse_args()
     images_build_matrix_json_file_path = pl.Path(args.images_build_matrix_json_file)
+
+    print(images_build_matrix_json_file_path.read_text(), file=sys.stderr)
+
     images_build_matrix = json.loads(
         images_build_matrix_json_file_path.read_text()
     )
