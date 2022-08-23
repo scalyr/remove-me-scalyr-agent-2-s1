@@ -91,6 +91,11 @@ jobs:
               { "name": "docker-api-alpine", "master_run_only": true }
             ]
 
+          images-to-publish: |
+            [
+              
+            ]
+
 
   # This job pre-executes and caches Runner steps that has to be executed in a separate job.
   # For example, we build platform-specific base docker images in a separate jobs to reduce overall build time, because
@@ -321,7 +326,7 @@ jobs:
           channel: '#cloud-tech'
 
   publish-images:
-    if: ${{ needs.pre-job.outputs.to_publish }}
+    #if: ${{ needs.pre-job.outputs.to_publish == 'true'}}
     needs:
       - pre-job
       - test-k8s-images
@@ -352,23 +357,23 @@ jobs:
       - name: Publish image of the builder '${{ matrix.name }}' using master branch commit sha '${{ github.sha }}'
         if: github.ref_type == 'branch'
         run: |
-          python3 build_package_new.py ${{ matrix.name }} \
+          python3 build_package_new_refactored.py ${{ matrix.name }} \
             publish \
             --src-registry-data-dir /tmp/registry \
             --tags "${{ github.sha }}" \
             --user ${{ secrets.DOCKER_HUB_USERNAME_TEST_ACCOUNT }} \
-            --dest-registry-creds "${{ secrets.DOCKER_HUB_USERNAME_TEST_ACCOUNT }}:${{ secrets.DOCKER_HUB_PASSWORD_TEST_ACCOUNT }}"
+            --dst-registry-creds "${{ secrets.DOCKER_HUB_USERNAME_TEST_ACCOUNT }}:${{ secrets.DOCKER_HUB_PASSWORD_TEST_ACCOUNT }}"
           
 
       - name: Publish image of the builder '${{ matrix.name }}' using production tag '${{ github.ref_name }}'
         if: github.ref_type == 'tag'
         run: |
-          python3 build_package_new.py ${{ matrix.name }} \
+          python3 build_package_new_refactored.py ${{ matrix.name }} \
             publish \
             --src-registry-data-dir /tmp/registry \
             --tags "latest,${{ github.ref_name }}" \
             --user ${{ secrets.DOCKER_HUB_USERNAME_TEST_ACCOUNT }} \
-            --dest-registry-creds "${{ secrets.DOCKER_HUB_USERNAME_TEST_ACCOUNT }}:${{ secrets.DOCKER_HUB_PASSWORD_TEST_ACCOUNT }}"
+            --dst-registry-creds "${{ secrets.DOCKER_HUB_USERNAME_TEST_ACCOUNT }}:${{ secrets.DOCKER_HUB_PASSWORD_TEST_ACCOUNT }}"
       
       
       
