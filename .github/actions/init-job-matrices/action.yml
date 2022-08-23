@@ -14,6 +14,10 @@ inputs:
     description: "JSON-formatted job matrix for docker image tests."
     required: true
 
+  images-to-publish:
+    description: "JSON-formatted job matrix for agent images to publish."
+    required: true
+
 outputs:
   to_publish:
     description: "Boolean flag that indicates that result build artifacts has to be published."
@@ -30,6 +34,11 @@ outputs:
   docker_test_matrix_json:
     description: "Final JSON-formatted job matrix for docker image tests."
     value: ${{ steps.get-job-matrices.outputs.docker_test_matrix_json }}
+  images_to_publish_matrix_json:
+    description: "Final JSON-formatted job matrix for agent images to publish."
+    value: ${{ steps.get-job-matrices.outputs.images_to_publish_matrix_json }}
+
+
 
 
 runs:
@@ -58,6 +67,10 @@ runs:
         ${{ inputs.docker-images-tests }}
         EOT
         
+        cat <<EOT > /tmp/images_to_publish_matrix.json
+        ${{ inputs.images-to-publish }}
+        EOT
+        
         python3 agent_build_refactored/scripts/get_github_actions_job_matrices.py \
           --images-build-matrix-json-file /tmp/images-build-matrix.json \
           --k8s-images-test-matrix-json-file /tmp/k8s_images-test-matrix.json \
@@ -69,6 +82,8 @@ runs:
         echo "::set-output name=k8s_test_matrix_json::$(cat /tmp/final_matrices.json | jq -c '.k8s_test_matrix_json')"
         echo "::set-output name=docker_test_matrix_json::$(cat /tmp/final_matrices.json | jq -c '.docker_test_matrix_json')"
         echo "::set-output name=to_publish::$(cat /tmp/final_matrices.json | jq -c '.to_publish')"
+        
+        echo "::set-output name=images_to_publish_matrix_json::$(cat  /tmp/images_to_publish_matrix.json | jq -c)"
 
     - name: Print job matrices
       shell: bash
@@ -86,4 +101,7 @@ runs:
         echo "Docker images tests job matrix: "
         echo '${{ steps.get-job-matrices.outputs.docker_test_matrix_json }}' | jq --color-output
         
-        echo "Publish artifacts = ${{ steps.get-job-matrices.outputs.to_publish }}"
+        echo "Agent images publish job matrix: "
+        echo '${{ steps.get-job-matrices.outputs.images_to_publish_matrix_json }}' | jq --color-output
+        
+        echo "Publish artifacts = ${{ steps.get-job-matrices.outputs.to_publish }}" 
