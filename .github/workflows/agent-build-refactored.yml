@@ -224,7 +224,7 @@ jobs:
       - name: Execute the test environment deploy runner
         uses: ./.github/actions/execute-runner
         with:
-          runner-fqdn: "agent_build.__init__.BuildTestEnvironment"
+          runner-fqdn: "agent_build_refactored.__init__.BuildTestEnvironment"
 
       - name: Download registry with previously built image
         uses: actions/download-artifact@v3
@@ -289,7 +289,7 @@ jobs:
       - name: Execute the test environment deploy runner
         uses: ./.github/actions/execute-runner
         with:
-          runner-fqdn: "agent_build.__init__.BuildTestEnvironment"
+          runner-fqdn: "agent_build_refactored.__init__.BuildTestEnvironment"
 
       - name: Download registry with previously built image
         uses: actions/download-artifact@v3
