@@ -88,7 +88,7 @@ jobs:
               
               { "name": "docker-json-alpine", "master_run_only": true },
               { "name": "docker-syslog-alpine", "master_run_only": true },
-              { "name": "docker-api-alpine", "master_run_only": true },
+              { "name": "docker-api-alpine", "master_run_only": true }
             ]
 
 
