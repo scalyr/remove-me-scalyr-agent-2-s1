@@ -348,7 +348,7 @@ jobs:
           - docker-api-alpine
           - k8s-alpine
         os: [ ubuntu-20.04 ]
-        python-version: 3.10.6
+        python-version: [ 3.10.6 ]
 
 
     steps:
