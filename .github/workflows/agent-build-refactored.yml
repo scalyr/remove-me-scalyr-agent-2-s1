@@ -501,8 +501,8 @@ jobs:
       - name: Cleanup old prefix lists for ec2 test security group.
         run: |
           python3 tests/end_to_end_tests/run_in_remote_machine/cleanup_test_ec2_objects.py \
-            --access-key "${{ secrets.AWS_DEV_ACCESS_KEY }}" \
-            --secret-key "${{ secrets.AWS_DEV_SECRET_KEY }}" \
+            --access-key "${{ secrets.SCALYR_CLOUDTECH_TESTING_DEV_AWS_ACCESS_KEY }}" \
+            --secret-key "${{ secrets.SCALYR_CLOUDTECH_TESTING_DEV_AWS_ACCESS_SECRET }}" \
             --prefix-list-id "${{ secrets.AWS_SECURITY_GROUPS_NAMED_PREFIX_ID }}" \
             --region "us-east-1" \
             --workflow-id ${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}
