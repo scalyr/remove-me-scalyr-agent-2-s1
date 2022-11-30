@@ -504,5 +504,5 @@ jobs:
             --access-key "${{ secrets.AWS_DEV_ACCESS_KEY }}" \
             --secret-key "${{ secrets.AWS_DEV_SECRET_KEY }}" \
             --prefix-list-id "${{ secrets.AWS_SECURITY_GROUPS_NAMED_PREFIX_ID }}" \
-            --region ${{ secrets.AWS_DEV_REGION }} \
+            --region "us-east-1" \
             --workflow-id ${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}
