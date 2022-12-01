@@ -130,10 +130,11 @@ def _install_packages_from_files(
 ):
     if package_type == "deb":
         subprocess.check_call(
-            ["dpkg", "-i", str(python_package_path)]
+            ["dpkg", "-i", str(python_package_path), str(agent_libs_package_path)]
         )
+    elif package_type == "rpm":
         subprocess.check_call(
-            ["dpkg", "-i", str(agent_libs_package_path)]
+            ["rpm", "i", str(python_package_path), str(agent_libs_package_path)]
         )
     else:
         raise Exception(f"Unknown package type: {package_type}")
