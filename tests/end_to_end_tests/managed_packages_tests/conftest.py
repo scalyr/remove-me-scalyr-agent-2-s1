@@ -188,34 +188,6 @@ def agent_libs_package_path(package_source_type, package_source, package_builder
     return found[0]
 
 
-def _call_yum(command: List, distro: str):
-    env = {}
-
-    if distro == "centos7":
-        # need additional library tweaking for tests that runs from the frozen pytest runner.
-        env["LD_LIBRARY_PATH"] = "/lib64"
-
-    subprocess.check_call(
-        ["yum", *command],
-        env=env
-    )
-
-
-def _call_apt(command: List[str], distro_name: str):
-    env = {
-        "DEBIAN_FRONTEND": "noninteractive"
-    }
-
-    if distro_name in ["ubuntu1804", "ubuntu1604", "ubuntu1404"]:
-        # need additional library tweaking for tests that runs from the frozen pytest runner.
-        env["PATH"] = f"/usr/sbin:/usr/local/sbin:/sbin:${os.environ['PATH']}"
-
-    subprocess.check_call(
-        ["apt", *command],
-        env=env
-    )
-
-
 
 
 
