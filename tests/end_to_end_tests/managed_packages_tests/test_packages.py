@@ -184,7 +184,7 @@ def _add_repo(
         repo_file_path.write_text(
             f"deb {repo_url} trusty main"
         )
-        subprocess.check_call(["apt", "update"])
+        _call_apt(["update"])
     elif package_type == "rpm":
         repo_key_path = pl.Path("/tmp/public_key")
         repo_key_path.write_text(repo_public_key)
@@ -214,12 +214,27 @@ def _install_package(
     Installs package from repo.
     """
     if package_type == "deb":
-        subprocess.check_call(["apt", "install", "-y", package_name])
+        _call_apt(["install", "-y", package_name])
     elif package_type == "rpm":
-        subprocess.check_call(
-            ["yum", "install", "-y", package_name],
-            env={"LD_LIBRARY_PATH": "/lib64"}
-        )
+        _call_yum(["install", "-y", package_name])
     else:
         raise Exception(f"Unknown package type: {package_type}")
+
+
+def _call_apt(command: List[str]):
+    """Run apt command"""
+    subprocess.check_call(
+        ["apt", *command],
+        # Since test may run in "frozen" pytest executable, add missing variables.
+        env={"LD_LIBRARY_PATH": "/lib"}
+    )
+
+
+def _call_yum(command: List[str]):
+    """Run yum command"""
+    subprocess.check_call(
+        ["yum", *command],
+        # Since test may run in "frozen" pytest executable, add missing variables.
+        env={"LD_LIBRARY_PATH": "/lib64"}
+    )
 
