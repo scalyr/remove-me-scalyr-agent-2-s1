@@ -38,40 +38,51 @@ are changing system state and must be aware of risks.
 """
 
 
-def test_packages(
-        package_builder,
-        repo_url,
-        repo_public_key,
-        distro_name,
+def _verify_package_subdirectories(
+        package_path: pl.Path,
+        package_type: str,
+        package_name: str,
+        output_dir: pl.Path,
+        expected_folders: List[str],
 ):
-    _add_repo(
-        package_type=package_builder.PACKAGE_TYPE,
-        repo_url=repo_url,
-        repo_public_key=repo_public_key,
-        distro_name=distro_name
-    )
-    _install_package(
-        package_type=package_builder.PACKAGE_TYPE,
-        package_name=AGENT_LIBS_PACKAGE_NAME,
-    )
+    """
+    Verify structure if the agent's dependency packages.
+    First,  we have to ensure that all package files are located inside special subdirectory and nothing has leaked
+    outside.
+    :param package_type: Type of the package, e.g. deb, rpm.
+    :param package_name: Name of the package.
+    :param output_dir: Directory where to extract a package.
+    :param expected_folders: List of paths that are expected to be in this package.
+    """
 
-    logger.info(
-        "Execute simple sanity test script for the python interpreter and its libraries."
-    )
-    subprocess.check_call(
-        [
-            f"/usr/lib/{AGENT_DEPENDENCY_PACKAGE_SUBDIR_NAME}/bin/python3",
-            "tests/end_to_end_tests/managed_packages_tests/verify_python_interpreter.py",
-        ],
-        env={
-            # It's important to override the 'LD_LIBRARY_PATH' to be sure that libraries paths from the test runner
-            # frozen binary are not leaked to a script's process.
-            "LD_LIBRARY_PATH": "",
-            "PYTHONPATH": str(SOURCE_ROOT),
-        },
-    )
+    package_root = output_dir / package_name
+    package_root.mkdir()
 
-    # TODO: Add actual agent package testing here.
+    if package_type == "deb":
+        subprocess.check_call(["dpkg-deb", "-x", str(package_path), str(package_root)])
+    elif package_type == "rpm":
+        escaped_package_path = shlex.quote(str(package_path))
+        command = f"rpm2cpio {escaped_package_path} | cpio -idm"
+        subprocess.check_call(
+            command, shell=True, cwd=package_root,
+            env={"LD_LIBRARY_PATH": "/lib64"},
+        )
+    else:
+        raise Exception(f"Unknown package type {package_type}.")
+
+    remaining_paths = set(package_root.glob("**/*"))
+
+    for expected in expected_folders:
+        expected_path = package_root / expected
+        for path in list(remaining_paths):
+            if str(path).startswith(str(expected_path)) or str(path) in str(
+                    expected_path
+            ):
+                remaining_paths.remove(path)
+
+    assert (
+            len(remaining_paths) == 0
+    ), "Something remains outside if the expected package structure."
 
 
 def test_dependency_packages(
@@ -121,51 +132,40 @@ def test_dependency_packages(
     )
 
 
-def _verify_package_subdirectories(
-        package_path: pl.Path,
-        package_type: str,
-        package_name: str,
-        output_dir: pl.Path,
-        expected_folders: List[str],
+def test_packages(
+        package_builder,
+        repo_url,
+        repo_public_key,
+        distro_name,
 ):
-    """
-    Verify structure if the agent's dependency packages.
-    First,  we have to ensure that all package files are located inside special subdirectory and nothing has leaked
-    outside.
-    :param package_type: Type of the package, e.g. deb, rpm.
-    :param package_name: Name of the package.
-    :param output_dir: Directory where to extract a package.
-    :param expected_folders: List of paths that are expected to be in this package.
-    """
+    _add_repo(
+        package_type=package_builder.PACKAGE_TYPE,
+        repo_url=repo_url,
+        repo_public_key=repo_public_key,
+        distro_name=distro_name
+    )
+    _install_package(
+        package_type=package_builder.PACKAGE_TYPE,
+        package_name=AGENT_LIBS_PACKAGE_NAME,
+    )
 
-    package_root = output_dir / package_name
-    package_root.mkdir()
+    logger.info(
+        "Execute simple sanity test script for the python interpreter and its libraries."
+    )
+    subprocess.check_call(
+        [
+            f"/usr/lib/{AGENT_DEPENDENCY_PACKAGE_SUBDIR_NAME}/bin/python3",
+            "tests/end_to_end_tests/managed_packages_tests/verify_python_interpreter.py",
+        ],
+        env={
+            # It's important to override the 'LD_LIBRARY_PATH' to be sure that libraries paths from the test runner
+            # frozen binary are not leaked to a script's process.
+            "LD_LIBRARY_PATH": "",
+            "PYTHONPATH": str(SOURCE_ROOT),
+        },
+    )
 
-    if package_type == "deb":
-        subprocess.check_call(["dpkg-deb", "-x", str(package_path), str(package_root)])
-    elif package_type == "rpm":
-        escaped_package_path = shlex.quote(str(package_path))
-        command = f"rpm2cpio {escaped_package_path} | cpio -idm"
-        subprocess.check_call(
-            command, shell=True, cwd=package_root,
-            env={"LD_LIBRARY_PATH": "/lib64"},
-        )
-    else:
-        raise Exception(f"Unknown package type {package_type}.")
-
-    remaining_paths = set(package_root.glob("**/*"))
-
-    for expected in expected_folders:
-        expected_path = package_root / expected
-        for path in list(remaining_paths):
-            if str(path).startswith(str(expected_path)) or str(path) in str(
-                    expected_path
-            ):
-                remaining_paths.remove(path)
-
-    assert (
-            len(remaining_paths) == 0
-    ), "Something remains outside if the expected package structure."
+    # TODO: Add actual agent package testing here.
 
 
 def _add_repo(
