@@ -17,7 +17,7 @@ import shlex
 import subprocess
 import logging
 import textwrap
-from typing import List
+from typing import List, Union
 
 import pytest
 
@@ -42,11 +42,13 @@ def test_packages(
         package_builder,
         repo_url,
         repo_public_key,
+        distro_name,
 ):
     _add_repo(
         package_type=package_builder.PACKAGE_TYPE,
         repo_url=repo_url,
         repo_public_key=repo_public_key,
+        distro_name=distro_name
     )
     _install_package(
         package_type=package_builder.PACKAGE_TYPE,
@@ -170,9 +172,13 @@ def _add_repo(
         package_type: str,
         repo_url,
         repo_public_key: str,
+        distro_name: str
 ):
     """
     Add repo with tested packages.
+    :param package_type: Type of the package, e.g. deb, rpm.
+    :param repo_url: URL of a repo.
+    :param repo_public_key: Content of repo's public key.
     """
 
     if package_type == "deb":
@@ -180,15 +186,18 @@ def _add_repo(
         repo_key_path = pl.Path("/etc/apt/trusted.gpg.d/test.asc")
         repo_key_path.write_text(repo_public_key)
 
+        # Add repo's config file.
         repo_file_path = pl.Path("/etc/apt/sources.list.d/test.list")
         repo_file_path.write_text(
             f"deb {repo_url} trusty main"
         )
         _call_apt(["update"])
     elif package_type == "rpm":
+        # Add repo's public key
         repo_key_path = pl.Path("/tmp/public_key")
         repo_key_path.write_text(repo_public_key)
 
+        # Add repo's config file.
         repo_file_path = pl.Path("/etc/yum.repos.d/test.repo")
         repo_config = textwrap.dedent(
             f"""
@@ -204,6 +213,20 @@ def _add_repo(
         repo_file_path.write_text(
             repo_config.format(repo_url=repo_url)
         )
+
+        if distro_name == "centos8":
+            # For centos 8 we replace repo urls for vault.
+            for repo_name in ["BaseOS", "AppStream"]:
+                repo_file = pl.Path(f"/etc/yum.repos.d/CentOS-Linux-{repo_name}.repo")
+                content = repo_file.read_text()
+                content = content.replace("mirror.centos.org", "vault.centos.org")
+                content = content.replace("#baseurl", "baseurl")
+                content = content.replace("mirrorlist=", "#mirrorlist=")
+                repo_file.write_text(content)
+
+        elif distro_name == "centos6":
+            # for centos 6, we remove repo file for disabled repo, so it could use vault repo.
+            pl.Path("/etc/yum.repos.d/CentOS-Base.repo").unlink()
 
 
 def _install_package(
@@ -237,4 +260,5 @@ def _call_yum(command: List[str]):
         # Since test may run in "frozen" pytest executable, add missing variables.
         env={"LD_LIBRARY_PATH": "/lib64"}
     )
+
 
