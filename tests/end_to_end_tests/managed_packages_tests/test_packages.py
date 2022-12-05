@@ -186,6 +186,13 @@ def _add_repo(
         repo_key_path = pl.Path("/etc/apt/trusted.gpg.d/test.asc")
         repo_key_path.write_text(repo_public_key)
 
+        # Add repo for ubuntu 14 and 16 by using deprecated apt-key command.
+        if distro_name in ["ubuntu1404", "ubuntu1604"]:
+            subprocess.check_call(
+                ["apt-key", "add", str(repo_key_path)],
+                env={"LD_LIBRARY_PATH": "/lib"}
+            )
+
         # Add repo's config file.
         repo_file_path = pl.Path("/etc/apt/sources.list.d/test.list")
         repo_file_path.write_text(
@@ -249,7 +256,10 @@ def _call_apt(command: List[str]):
     subprocess.check_call(
         ["apt", *command],
         # Since test may run in "frozen" pytest executable, add missing variables.
-        env={"LD_LIBRARY_PATH": "/lib"}
+        env={
+            "LD_LIBRARY_PATH": "/lib",
+            "PATH": "/usr/sbin:/sbin:/usr/bin:/bin"
+        }
     )
 
 
