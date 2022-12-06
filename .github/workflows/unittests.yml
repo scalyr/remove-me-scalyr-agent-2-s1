@@ -68,7 +68,8 @@ jobs:
 
     needs: pre_job
     # NOTE: We always want to run job on master branch
-    if: (success() || failure()) && (${{ needs.pre_job.outputs.should_skip != 'true' || (github.ref == 'refs/heads/master' || github.base_ref == 'master') }})
+    #if: (success() || failure()) && (${{ needs.pre_job.outputs.should_skip != 'true' || (github.ref == 'refs/heads/master' || github.base_ref == 'master') }})
+    if: (success() || failure()) && (${{ needs.pre_job.outputs.should_skip != 'true' }})
 
     timeout-minutes: 10
     defaults:
