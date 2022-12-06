@@ -64,7 +64,9 @@ def _verify_package_subdirectories(
         escaped_package_path = shlex.quote(str(package_path))
         command = f"rpm2cpio {escaped_package_path} | cpio -idm"
         subprocess.check_call(
-            command, shell=True, cwd=package_root,
+            command,
+            shell=True,
+            cwd=package_root,
             env={"LD_LIBRARY_PATH": "/lib64"},
         )
     else:
@@ -142,7 +144,7 @@ def test_packages(
         package_type=package_builder.PACKAGE_TYPE,
         repo_url=repo_url,
         repo_public_key=repo_public_key,
-        distro_name=distro_name
+        distro_name=distro_name,
     )
     _install_package(
         package_type=package_builder.PACKAGE_TYPE,
@@ -168,17 +170,13 @@ def test_packages(
     # TODO: Add actual agent package testing here.
 
 
-def _add_repo(
-        package_type: str,
-        repo_url,
-        repo_public_key: str,
-        distro_name: str
-):
+def _add_repo(package_type: str, repo_url, repo_public_key: str, distro_name: str):
     """
     Add repo with tested packages.
     :param package_type: Type of the package, e.g. deb, rpm.
     :param repo_url: URL of a repo.
     :param repo_public_key: Content of repo's public key.
+    :param distro_name: name of a tested distribution.
     """
 
     if package_type == "deb":
@@ -189,15 +187,12 @@ def _add_repo(
         # Add repo for ubuntu 14 and 16 by using deprecated apt-key command.
         if distro_name in ["ubuntu1404", "ubuntu1604"]:
             subprocess.check_call(
-                ["apt-key", "add", str(repo_key_path)],
-                env={"LD_LIBRARY_PATH": "/lib"}
+                ["apt-key", "add", str(repo_key_path)], env={"LD_LIBRARY_PATH": "/lib"}
             )
 
         # Add repo's config file.
         repo_file_path = pl.Path("/etc/apt/sources.list.d/test.list")
-        repo_file_path.write_text(
-            f"deb {repo_url} trusty main"
-        )
+        repo_file_path.write_text(f"deb {repo_url} trusty main")
         _call_apt(["update"])
     elif package_type == "rpm":
         # Add repo's public key
@@ -217,9 +212,7 @@ def _add_repo(
             gpgkey=file://{repo_key_path}
             """
         )
-        repo_file_path.write_text(
-            repo_config.format(repo_url=repo_url)
-        )
+        repo_file_path.write_text(repo_config.format(repo_url=repo_url))
 
         if distro_name == "centos8":
             # For centos 8 we replace repo urls for vault.
@@ -237,8 +230,8 @@ def _add_repo(
 
 
 def _install_package(
-        package_type: str,
-        package_name: str,
+    package_type: str,
+    package_name: str,
 ):
     """
     Installs package from repo.
@@ -256,10 +249,7 @@ def _call_apt(command: List[str]):
     subprocess.check_call(
         ["apt", *command],
         # Since test may run in "frozen" pytest executable, add missing variables.
-        env={
-            "LD_LIBRARY_PATH": "/lib",
-            "PATH": "/usr/sbin:/sbin:/usr/bin:/bin"
-        }
+        env={"LD_LIBRARY_PATH": "/lib", "PATH": "/usr/sbin:/sbin:/usr/bin:/bin"},
     )
 
 
@@ -268,7 +258,5 @@ def _call_yum(command: List[str]):
     subprocess.check_call(
         ["yum", *command],
         # Since test may run in "frozen" pytest executable, add missing variables.
-        env={"LD_LIBRARY_PATH": "/lib64"}
+        env={"LD_LIBRARY_PATH": "/lib64"},
     )
-
-

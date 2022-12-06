@@ -219,18 +219,17 @@ def run_test_in_ec2_instance(
 
         final_command = ["/tmp/test_runner", "-s", *command]
 
-        command_str = shlex.join(final_command)
+        command_str = shlex.join(final_command)  # pylint: disable=no-member
         stdin, stdout, stderr = ssh.exec_command(
             command=f"TEST_RUNS_REMOTELY=1 sudo -E {command_str} 2>&1",
         )
 
         print(f"stdout: {stdout.read().decode()}")
 
-        ssh.close()
+        return_code = stdout.channel.recv_exit_status()
 
-        assert (
-            stdout.channel.recv_exit_status() == 0
-        ), "Remote test execution has failed with."
+        ssh.close()
+        assert return_code == 0, f"Remote test execution has failed with {return_code}"
 
     file_mappings = file_mappings or {}
     start_time = int(time.time())

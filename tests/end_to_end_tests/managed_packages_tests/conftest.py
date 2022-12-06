@@ -17,7 +17,7 @@ from agent_build_refactored.managed_packages.managed_packages_builders import (
     ALL_MANAGED_PACKAGE_BUILDERS,
     PYTHON_PACKAGE_NAME,
     AGENT_LIBS_PACKAGE_NAME,
-    PREPARE_TOOLSET_GLIBC_X86_64
+    PREPARE_TOOLSET_GLIBC_X86_64,
 )
 from tests.end_to_end_tests.run_in_remote_machine import DISTROS
 
@@ -157,9 +157,9 @@ class RepoBuilder(Runner):
     BASE_ENVIRONMENT = PREPARE_TOOLSET_GLIBC_X86_64
 
     def build(
-            self,
-            package_type: str,
-            packages_dir_path: pl.Path,
+        self,
+        package_type: str,
+        packages_dir_path: pl.Path,
     ):
 
         self.run_required()
@@ -170,7 +170,7 @@ class RepoBuilder(Runner):
                     "--package-type",
                     package_type,
                     "--packages-dir",
-                    RunnerMappedPath(packages_dir_path)
+                    RunnerMappedPath(packages_dir_path),
                 ]
             )
             return
@@ -179,12 +179,18 @@ class RepoBuilder(Runner):
         repo_path.mkdir()
         repo_public_key_file = self.output_path / "repo_public_key.pub"
 
-        sign_key_id = subprocess.check_output(
-            "gpg2 --with-colons --fingerprint test | awk -F: '$1 == \"pub\" {{print $5;}}'",
-            shell=True,
-        ).strip().decode()
+        sign_key_id = (
+            subprocess.check_output(
+                "gpg2 --with-colons --fingerprint test | awk -F: '$1 == \"pub\" {{print $5;}}'",
+                shell=True,
+            )
+            .strip()
+            .decode()
+        )
 
-        repo_public_key = subprocess.check_output("gpg2 --armor --export", shell=True).decode()
+        repo_public_key = subprocess.check_output(
+            "gpg2 --armor --export", shell=True
+        ).decode()
         repo_public_key_file.write_text(repo_public_key)
 
         if package_type == "deb":
@@ -193,8 +199,9 @@ class RepoBuilder(Runner):
             conf_path.mkdir(parents=True)
 
             conf_distributions_path = conf_path / "distributions"
-            conf_distributions_path.write_text(textwrap.dedent(
-                f"""
+            conf_distributions_path.write_text(
+                textwrap.dedent(
+                    f"""
                 Origin: test_repo
                 Label: test_repo
                 Codename: trusty
@@ -203,29 +210,26 @@ class RepoBuilder(Runner):
                 Description: example repo
                 SignWith: {sign_key_id}
                 """
-            ))
+                )
+            )
 
-            for package_path in packages_dir_path.glob(f"*.deb"):
-                subprocess.check_call([
-                    "reprepro",
-                    "-b",
-                    str(repo_path),
-                    "includedeb",
-                    "trusty",
-                    str(package_path)
-                ])
+            for package_path in packages_dir_path.glob("*.deb"):
+                subprocess.check_call(
+                    [
+                        "reprepro",
+                        "-b",
+                        str(repo_path),
+                        "includedeb",
+                        "trusty",
+                        str(package_path),
+                    ]
+                )
 
         elif package_type == "rpm":
             # Create rpm repository using 'createrepo_c'.
-            for package_path in packages_dir_path.glob(f"*.rpm"):
-                shutil.copy(
-                    package_path,
-                    repo_path
-                )
-            subprocess.check_call([
-                "createrepo_c",
-                str(repo_path)
-            ])
+            for package_path in packages_dir_path.glob("*.rpm"):
+                shutil.copy(package_path, repo_path)
+            subprocess.check_call(["createrepo_c", str(repo_path)])
 
             # Sign repository's metadata
             metadata_path = repo_path / "repodata/repomd.xml"
@@ -237,7 +241,8 @@ class RepoBuilder(Runner):
                     "--output",
                     f"{metadata_path}.asc",
                     "--detach-sign",
-                    "--armor", str(metadata_path)
+                    "--armor",
+                    str(metadata_path),
                 ]
             )
 
@@ -245,11 +250,7 @@ class RepoBuilder(Runner):
     def add_command_line_arguments(cls, parser: argparse.ArgumentParser):
         super(RepoBuilder, cls).add_command_line_arguments(parser)
 
-        parser.add_argument(
-            "--package-type",
-            dest="package_type",
-            required=True
-        )
+        parser.add_argument("--package-type", dest="package_type", required=True)
         parser.add_argument(
             "--packages-dir",
             dest="packages_dir",
@@ -258,21 +259,21 @@ class RepoBuilder(Runner):
 
     @classmethod
     def handle_command_line_arguments(
-            cls,
-            args,
+        cls,
+        args,
     ):
         super(RepoBuilder, cls).handle_command_line_arguments(args)
         builder = cls()
         builder.build(
-            package_type=args.package_type,
-            packages_dir_path=pl.Path(args.packages_dir)
+            package_type=args.package_type, packages_dir_path=pl.Path(args.packages_dir)
         )
 
 
 @pytest.fixture(scope="session")
 def packages_repo_dir(package_source_type, package_builder, tmp_path_factory, request):
+    """Directory wit repo root, and it's public key file."""
     if package_source_type == "dir":
-
+        # Packages directory in not provided, build packages now.
         if request.config.option.packages_source is None:
             builder = package_builder()
             builder.build_packages()
@@ -280,14 +281,15 @@ def packages_repo_dir(package_source_type, package_builder, tmp_path_factory, re
         else:
             packages_dir = pl.Path(request.config.option.packages_source)
 
+        # Build mock repo from packages.
         repo_builder = RepoBuilder()
         repo_builder.build(
-            package_type=package_builder.PACKAGE_TYPE,
-            packages_dir_path=packages_dir
+            package_type=package_builder.PACKAGE_TYPE, packages_dir_path=packages_dir
         )
         repo_dir = repo_builder.output_path
 
     elif package_source_type == "repo-tarball":
+        # Extract repo directory from tarball.
         with tarfile.open(request.config.option.packages_source) as tf:
             repo_dir = tmp_path_factory.mktemp("repo_dir")
             tf.extractall(repo_dir)
@@ -299,6 +301,7 @@ def packages_repo_dir(package_source_type, package_builder, tmp_path_factory, re
 
 @pytest.fixture(scope="session")
 def repo_root(package_source_type, packages_repo_dir):
+    """Root directory of the mock repo."""
     if package_source_type not in ["dir", "repo-tarball"]:
         return None
 
@@ -307,6 +310,7 @@ def repo_root(package_source_type, packages_repo_dir):
 
 @pytest.fixture(scope="session")
 def repo_public_key(package_source_type, packages_repo_dir):
+    """Public key that is used to sign mock repo"""
     if package_source_type not in ["dir", "repo-tarball"]:
         return None
 
@@ -339,10 +343,9 @@ def repo_url(repo_root):
 
 
 def _get_package_path_from_repo(
-        package_name: str,
-        package_type: str,
-        repo_root: pl.Path
+    package_name: str, package_type: str, repo_root: pl.Path
 ):
+    """Helper function that finds package inside repo root."""
     if package_type == "deb":
         package_dir_path = repo_root / f"pool/main/s/{package_name}"
     elif package_type == "rpm":
@@ -350,9 +353,7 @@ def _get_package_path_from_repo(
     else:
         raise Exception(f"Unknown package type: '{package_type}'")
 
-    found = list(
-        package_dir_path.rglob(f"{package_name}*.{package_type}")
-    )
+    found = list(package_dir_path.rglob(f"{package_name}*.{package_type}"))
     assert len(found) == 1
     return found[0]
 
@@ -365,7 +366,7 @@ def python_package_path(repo_root, package_builder):
     return _get_package_path_from_repo(
         package_name=PYTHON_PACKAGE_NAME,
         package_type=package_builder.PACKAGE_TYPE,
-        repo_root=repo_root
+        repo_root=repo_root,
     )
 
 
@@ -377,5 +378,5 @@ def agent_libs_package_path(repo_root, package_builder):
     return _get_package_path_from_repo(
         package_name=AGENT_LIBS_PACKAGE_NAME,
         package_type=package_builder.PACKAGE_TYPE,
-        repo_root=repo_root
+        repo_root=repo_root,
     )
