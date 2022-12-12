@@ -41,17 +41,8 @@ def main():
     )
 
     args = parser.parse_args()
-    # for i in range(20):
-    #     s = sys.stdin.read()
-    #     print("SSS")
-    #     print(s)
-    #     print(i)
-    #     print("EEE")
 
-    ms = sys.stdin.read()
-    print(ms)
-
-    matrix = json.loads(ms)
+    matrix = json.loads(sys.stdin.read())
 
     is_master_run = args.is_master_run == "true"
 
