@@ -44,6 +44,7 @@ def main():
     for i in range(20):
         s = sys.stdin.read()
         print(s)
+        print(i)
     matrix = json.loads(s)
 
     is_master_run = args.is_master_run == "true"
