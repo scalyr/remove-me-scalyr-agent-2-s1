@@ -67,7 +67,6 @@ jobs:
               { "name": "docker-api-alpine", "master_run_only": true },
               { "name": "k8s-alpine", "master_run_only": true }
             ]
-
           managed-packages-to-build: |
             [
               { "name": "deb-amd64", "master_run_only": false },
