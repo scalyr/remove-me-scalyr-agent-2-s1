@@ -71,7 +71,7 @@ runs:
         mkdir -p /tmp/matrices
         
         echo "1"
-        echo "${{ inputs.images-to-build }}" tr -d "\n" | python3 agent_build_refactored/scripts/filter_matrix_jobs.py --is-master-run "${IS_MASTER_RUN}"
+        echo "${{ inputs.images-to-build }}" | tr -d "\n" | python3 agent_build_refactored/scripts/filter_matrix_jobs.py --is-master-run "${IS_MASTER_RUN}"
         exit 0
         echo "${{ inputs.images-to-build }}" tr -d "\n" | python3 agent_build_refactored/scripts/filter_matrix_jobs.py --is-master-run "${IS_MASTER_RUN}" > /tmp/matrices/agent_image_build_matrix.json
         echo "2"
