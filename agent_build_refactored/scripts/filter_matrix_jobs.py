@@ -49,7 +49,6 @@ def main():
     #     print("EEE")
 
     ms = sys.stdin.read()
-    print("SSS")
     print(ms)
 
     matrix = json.loads(ms)
