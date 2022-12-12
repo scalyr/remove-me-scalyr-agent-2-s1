@@ -48,7 +48,11 @@ def main():
     #     print(i)
     #     print("EEE")
 
-    matrix = json.loads(sys.stdin.read())
+    ms = sys.stdin.read()
+    print("SSS")
+    print(ms)
+
+    matrix = json.loads(ms)
 
     is_master_run = args.is_master_run == "true"
 
