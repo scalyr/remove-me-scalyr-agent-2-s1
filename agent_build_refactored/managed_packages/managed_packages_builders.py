@@ -275,6 +275,25 @@ class ManagedPackagesBuilder(Runner):
         description = "Scalyr Agent 2 is the daemon process Scalyr customers run on their servers to collect metrics" \
                       " and log files and transmit them to Scalyr."
 
+        def copy_with_shebang(new_path: pl.Path, new_shebang: str):
+            content = agent_main_path.read_text()
+            new_content = "\n".join([new_shebang, content.splitlines()[1:]])
+            new_path.write_text(new_content)
+
+        agent_source_root = agent_package_root / "usr/share/py"
+        # create copies of the agent_main.py with python2 and python3 shebang.
+        agent_main_path = agent_source_root / "scalyr_agent/agent_main.py"
+        agent_main_py2_path = agent_source_root / "scalyr_agent/agent_main_py2.py"
+        agent_main_py3_path = agent_source_root / "scalyr_agent/agent_main_py3.py"
+        agent_main_py_embedded_path = agent_source_root / "scalyr_agent/agent_main_py_embedded.py"
+        copy_with_shebang(agent_main_py2_path, "#!/usr/bin/env python2")
+        copy_with_shebang(agent_main_py3_path, "#!/usr/bin/env python3")
+        copy_with_shebang(agent_main_py_embedded_path, f"#!/usr/lib/{AGENT_DEPENDENCY_PACKAGE_SUBDIR_NAME}/bin/python3")
+        main_permissions = os.stat(agent_main_path).st_mode
+        os.chmod(agent_main_py2_path, main_permissions)
+        os.chmod(agent_main_py3_path, main_permissions)
+        os.chmod(agent_main_py_embedded_path, main_permissions)
+
         subprocess.check_call(
             [
                 # fmt: off
