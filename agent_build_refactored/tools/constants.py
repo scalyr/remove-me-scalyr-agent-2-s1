@@ -44,6 +44,19 @@ class DockerPlatformInfo:
             result = f"{result}-{self.variant}"
         return result
 
+    @property
+    def as_architecture(self):
+        if "amd64" in str(self):
+            return Architecture.X86_64
+
+        if "arm64" in str(self) or "arm/v8" in str(self):
+            return Architecture.ARM64
+
+        if "arm/v7" in str(self):
+            return Architecture.ARMV7
+
+        return Architecture.UNKNOWN
+
 
 class DockerPlatform(enum.Enum):
     AMD64 = DockerPlatformInfo("linux", "amd64")

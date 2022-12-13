@@ -28,7 +28,7 @@ import sys
 from typing import Union, Optional, List, Dict, Type
 
 
-from agent_build_refactored.tools.constants import SOURCE_ROOT, DockerPlatformInfo
+from agent_build_refactored.tools.constants import SOURCE_ROOT, DockerPlatformInfo, Architecture
 from agent_build_refactored.tools import (
     check_call_with_log,
     check_output_with_log_debug,
@@ -38,6 +38,7 @@ from agent_build_refactored.tools import (
     IN_DOCKER,
     IN_CICD,
 )
+from agent_build_refactored.tools.build_on_ec2 import run_ec2_instance, EC2DistroImage, create_ec2_instance_node, AWSSettings
 
 log = logging.getLogger(__name__)
 
@@ -155,16 +156,19 @@ class RunnerStep:
             self._base_docker_image = base.result_image
             self.initial_docker_image = base.initial_docker_image
             self._base_step = base
+            self.architecture = base.architecture
         elif isinstance(base, DockerImageSpec):
             # The previous step isn't specified, but it is just a docker image.
             self._base_docker_image = base
             self.initial_docker_image = base
             self._base_step = None
+            self.architecture = self.initial_docker_image.platform.as_architecture
         else:
             # the previous step is not specified.
             self._base_docker_image = None
             self.initial_docker_image = None
             self._base_step = None
+            self.architecture = Architecture.UNKNOWN
 
         self.runs_in_docker = bool(self.initial_docker_image)
 
@@ -396,6 +400,7 @@ class RunnerStep:
     def _run_script(
         self,
         work_dir: pl.Path,
+        remote_docker_host: str
     ):
         """
         Run the step's script, whether in docker or in current system.
@@ -503,7 +508,7 @@ class RunnerStep:
             ]
         )
 
-    def run(self, work_dir: pl.Path):
+    def run(self, work_dir: pl.Path, remote_docker_host: str = None):
         """
         Run the step. Based on its initial data, it will be executed in docker or locally, on the current system.
         """
@@ -551,7 +556,7 @@ class RunnerStep:
             f"Passed env. variables:\n    {env_variables_str}\n"
         )
         try:
-            self._run_script(work_dir=work_dir)
+            self._run_script(work_dir=work_dir, remote_docker_host=remote_docker_host)
         except Exception:
             files = [str(g) for g in self._tracked_files]
             logging.exception(
@@ -690,6 +695,7 @@ class Runner:
         self,
         work_dir: pl.Path = None,
         required_steps: List[RunnerStep] = None,
+        aws_settings: AWSSettings = None
     ):
         """
         :param work_dir: Path to the directory where Runner will store its results and intermediate data.
@@ -706,6 +712,9 @@ class Runner:
         self.output_path = self.work_dir / "runner_outputs" / output_name
 
         self._input_values = {}
+
+        self._ec2_builder_nodes = {}
+        self._aws_settings = aws_settings
 
     @classmethod
     def get_all_required_steps(cls) -> List[RunnerStep]:
@@ -869,22 +878,77 @@ class Runner:
         self.output_path.mkdir(parents=True)
 
         # Run all steps and runners we depend on, skip this if we already in docker to avoid infinite loop.
+        steps_to_run = []
         if not IN_DOCKER:
             if self.base_environment:
-                self.base_environment.run(work_dir=self.work_dir)
+                steps_to_run.append(self.base_environment)
 
-            for required_step in self.get_all_required_steps():
-                required_step.run(work_dir=self.work_dir)
+            steps_to_run.extend(
+                self.get_all_required_steps()
+            )
 
             if self.required_runners:
-                for runner in self.required_runners:
-                    runner.run(work_dir=self.work_dir)
+                steps_to_run.extend(
+                    self.required_runners
+                )
+
+        self._run_steps(
+            steps=steps_to_run,
+            work_dir=self.work_dir,
+            aws_settings=self._aws_settings
+        )
+
 
     def _run(self):
         """
         Function where Runners main work is executed.
         """
         pass
+
+    @staticmethod
+    def _run_steps(
+            steps: List[RunnerStep],
+            work_dir: pl.Path,
+            aws_settings=None
+    ):
+
+        if aws_settings is None:
+            ec2_builders = {}
+            required_ec2_builder_images = {}
+        else:
+            required_ec2_builder_images = {}
+            for step in steps:
+                ec2_image = DOCKER_EC2_BUILDERS.get(step.architecture)
+                if ec2_image is not None:
+                    required_ec2_builder_images[step.architecture] = ec2_image
+
+        for arch, ec2_image in required_ec2_builder_images.items():
+            create_ec2_instance_node(
+                aws_settings=aws_settings,
+                ec2_image=ec2_image,
+            )
+
+        for step in steps:
+            if aws_settings is None:
+                step.run(work_dir=work_dir)
+                continue
+
+            ec2_builder_node = ec2_builders.get(step.architecture)
+
+            if not ec2_builder_node:
+                if step.architecture not in DOCKER_EC2_BUILDERS:
+                    step.run(work_dir=work_dir)
+                    continue
+
+            ec2_builder_node = create_ec2_instance_node(
+                aws_settings=aws_settings,
+                ec2_image=DOCKER_EC2_BUILDERS[step.architecture],
+            )
+            ec2_builders[step.architecture] = ec2_builder_node
+
+            remote_docker_host = f"{ec2_builder_node.public_ips[0]:0}"
+            step.run(work_dir=work_dir, )
+
 
     @classmethod
     def _get_command_line_functions(cls):
@@ -924,6 +988,46 @@ class Runner:
             help="Directory path where all final and intermediate results are store, maybe helpful during debugging.",
         )
 
+        parser.add_argument(
+            "--prepare-ec2-builder-instance",
+            action="store_true"
+        )
+        parser.add_argument(
+            "--aws-access-key",
+        )
+        parser.add_argument(
+            "--aws-secret-key"
+        )
+        parser.add_argument(
+            "--aws-private-key-path",
+            required=False,
+            help="Path to a private key file. Required for running steps in in ec2 instances.",
+        )
+        parser.add_argument(
+            "--aws-private-key-name",
+            required=False,
+            help="Name to a private key file. Required for running steps in ec2 instances.",
+        )
+        parser.add_argument(
+            "--aws-region",
+            required=False,
+            help="Name of a AWS region. Required for running steps in ec2 instances.",
+        )
+        parser.add_argument(
+            "--aws-security-group",
+            required=False,
+            help="Name of an AWS security group. Required for running steps in ec2 instances.",
+        )
+        parser.add_argument(
+            "--aws-security-groups-prefix-list-id",
+            required=False,
+            help="ID of the prefix list of the security group. Required for running steps in ec2 instances.",
+        )
+        parser.add_argument(
+            "--ec2-objects-name-prefix",
+            required=False
+        )
+
     @classmethod
     def handle_command_line_arguments(
         cls,
@@ -942,9 +1046,41 @@ class Runner:
 
         if args.run_all_cacheable_steps:
             steps = cls.get_all_cacheable_steps()
-            for step in steps:
-                step.run(work_dir=work_dir)
+
+            aws_settings = None
+            if args.prepare_ec2_builder_instance:
+                aws_settings = AWSSettings(
+                    aws_access_key=args.aws_access_key,
+                    aws_secret_key=args.aws_secret_key,
+                    private_key_path=args.aws_private_key_path,
+                    private_key_name=args.aws_private_key_name,
+                    region=args.aws_region,
+                    security_group=args.aws_security_group,
+                    security_groups_prefix_list_id=args.aws_security_groups_prefix_list_id,
+                    ec2_objects_name_prefix=args.ec2_objects_name_prefix
+                )
+
+            cls._run_steps(
+                steps=steps,
+                work_dir=work_dir,
+                aws_settings=aws_settings
+            )
             exit(0)
+
+    def _start_ec2_builder_instance(self):
+        pass
+
+
+DOCKER_EC2_BUILDERS = {
+    Architecture.ARM64: EC2DistroImage(
+        image_id="ami-0951739b9be2881a1",
+        image_name="amazon-eks-arm64-node-1.17-v20210628",
+        #size_id="c7g.2xlarge",
+        size_id="c7g.medium",
+        ssh_username="user"
+    )
+}
+
 
 
 def cleanup():

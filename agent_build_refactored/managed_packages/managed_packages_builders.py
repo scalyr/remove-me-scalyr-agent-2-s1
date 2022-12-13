@@ -946,7 +946,8 @@ class ManagedPackagesBuilder(Runner):
 
 
 def create_build_dependencies_step(
-        base_image: EnvironmentRunnerStep
+        base_image: EnvironmentRunnerStep,
+        architecture: Architecture,
 ) -> EnvironmentRunnerStep:
     """
     This function creates step that installs Python build requirements, to a given environment.
@@ -990,6 +991,10 @@ def create_build_dependencies_step(
         },
 
     )
+    openssl_configure_platforms = {
+        Architecture.X86_64: "linux-x86_64",
+        Architecture.ARM64: "linux-aarch64"
+    }
 
     return EnvironmentRunnerStep(
         name="install_build_dependencies",
@@ -999,7 +1004,8 @@ def create_build_dependencies_step(
             "DOWNLOAD_BUILD_DEPENDENCIES": download_build_dependencies
         },
         environment_variables={
-            **build_dependencies_versions
+            "OPENSSL_CONFIGURE_PLATFORM": openssl_configure_platforms[architecture],
+            **build_dependencies_versions,
         },
         github_actions_settings=GitHubActionsSettings(
             cacheable=True
@@ -1078,9 +1084,28 @@ INSTALL_GCC_7_GLIBC_X86_64 = EnvironmentRunnerStep(
             cacheable=True
         )
     )
+
+# Step that prepares initial environment for X86_64 build environment.
+INSTALL_GCC_7_GLIBC_ARM64 = EnvironmentRunnerStep(
+        name="install_gcc_7_arm64",
+        script_path="agent_build_refactored/managed_packages/steps/install_gcc_7_arm64.sh",
+        base=DockerImageSpec(
+            name="centos:7",
+            platform=DockerPlatform.ARM64.value
+        ),
+        github_actions_settings=GitHubActionsSettings(
+            cacheable=True
+        )
+    )
+
 # Step that installs Python build requirements to the build environment.
 INSTALL_BUILD_DEPENDENCIES_GLIBC_X86_64 = create_build_dependencies_step(
-    base_image=INSTALL_GCC_7_GLIBC_X86_64
+    base_image=INSTALL_GCC_7_GLIBC_X86_64,
+    architecture=Architecture.X86_64,
+)
+INSTALL_BUILD_DEPENDENCIES_GLIBC_ARM64 = create_build_dependencies_step(
+    base_image=INSTALL_GCC_7_GLIBC_ARM64,
+    architecture=Architecture.ARM64
 )
 
 # Create step that builds Python interpreter.
@@ -1088,10 +1113,18 @@ BUILD_PYTHON_GLIBC_X86_64 = create_build_python_step(
     base_step=INSTALL_BUILD_DEPENDENCIES_GLIBC_X86_64
 )
 
+BUILD_PYTHON_GLIBC_ARM64 = create_build_python_step(
+    base_step=INSTALL_BUILD_DEPENDENCIES_GLIBC_ARM64
+)
+
 # Create step that builds agent requirement libs.
 BUILD_AGENT_LIBS_GLIBC_X86_64 = create_build_agent_libs_step(
     base_step=INSTALL_BUILD_DEPENDENCIES_GLIBC_X86_64,
     build_python_step=BUILD_PYTHON_GLIBC_X86_64
+)
+BUILD_AGENT_LIBS_GLIBC_ARM64 = create_build_agent_libs_step(
+    base_step=INSTALL_BUILD_DEPENDENCIES_GLIBC_X86_64,
+    build_python_step=BUILD_PYTHON_GLIBC_ARM64
 )
 
 # Create step that prepare environment with all needed tools.
@@ -1119,6 +1152,31 @@ PREPARE_TOOLSET_GLIBC_X86_64 = EnvironmentRunnerStep(
     )
 )
 
+# Create step that prepare environment with all needed tools.
+PREPARE_TOOLSET_GLIBC_ARM64 = EnvironmentRunnerStep(
+    name="prepare_toolset",
+    script_path="agent_build_refactored/managed_packages/steps/prepare_toolset.sh",
+    base=DockerImageSpec(
+        name="ubuntu:22.04",
+        platform=DockerPlatform.AMD64.value
+    ),
+    required_steps={
+        "BUILD_PYTHON": BUILD_PYTHON_GLIBC_ARM64,
+        "BUILD_AGENT_LIBS": BUILD_AGENT_LIBS_GLIBC_ARM64
+    },
+    environment_variables={
+        "SUBDIR_NAME": AGENT_DEPENDENCY_PACKAGE_SUBDIR_NAME,
+        "FPM_VERSION": "1.14.2",
+        "PACKAGECLOUD_VERSION": "0.3.11",
+        "USER_NAME": subprocess.check_output("whoami").decode().strip(),
+        "USER_ID": str(os.getuid()),
+        "USER_GID": str(os.getgid()),
+    },
+    github_actions_settings=GitHubActionsSettings(
+        cacheable=True
+    )
+)
+
 
 class DebManagedPackagesBuilderX86_64(ManagedPackagesBuilder):
     BASE_ENVIRONMENT = PREPARE_TOOLSET_GLIBC_X86_64
@@ -1126,6 +1184,16 @@ class DebManagedPackagesBuilderX86_64(ManagedPackagesBuilder):
     PACKAGE_TYPE = "deb"
     PYTHON_BUILD_STEP = BUILD_PYTHON_GLIBC_X86_64
     AGENT_LIBS_BUILD_STEP = BUILD_AGENT_LIBS_GLIBC_X86_64
+    PACKAGECLOUD_DISTRO = "any"
+    PACKAGECLOUD_DISTRO_VERSION = "any"
+
+
+class DebManagedPackagesBuilderARM64(ManagedPackagesBuilder):
+    BASE_ENVIRONMENT = PREPARE_TOOLSET_GLIBC_ARM64
+    DEPENDENCY_PACKAGES_ARCHITECTURE = Architecture.ARM64
+    PACKAGE_TYPE = "deb"
+    PYTHON_BUILD_STEP = BUILD_PYTHON_GLIBC_ARM64
+    AGENT_LIBS_BUILD_STEP = BUILD_AGENT_LIBS_GLIBC_ARM64
     PACKAGECLOUD_DISTRO = "any"
     PACKAGECLOUD_DISTRO_VERSION = "any"
 
@@ -1142,5 +1210,6 @@ class RpmManagedPackagesBuilderx86_64(ManagedPackagesBuilder):
 
 ALL_MANAGED_PACKAGE_BUILDERS: Dict[str, Type[ManagedPackagesBuilder]] = {
     "deb-amd64": DebManagedPackagesBuilderX86_64,
+    "deb-arm64": DebManagedPackagesBuilderARM64,
     "rpm-x86_64": RpmManagedPackagesBuilderx86_64
 }
