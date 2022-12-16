@@ -219,7 +219,7 @@ def run_test_remotely(
                 "-e",
                 "TEST_RUNS_IN_DOCKER=1",
                 "--platform",
-                str(architecture.as_docker_platform),
+                str(architecture.as_docker_platform.value),
                 distro,
                 "/test_runner",
                 "-s",

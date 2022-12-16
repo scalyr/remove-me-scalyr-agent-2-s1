@@ -277,10 +277,10 @@ class ManagedPackagesBuilder(Runner):
 
         def copy_with_shebang(new_path: pl.Path, new_shebang: str):
             content = agent_main_path.read_text()
-            new_content = "\n".join([new_shebang, content.splitlines()[1:]])
+            new_content = "\n".join([new_shebang, *content.splitlines()[1:]])
             new_path.write_text(new_content)
 
-        agent_source_root = agent_package_root / "usr/share/py"
+        agent_source_root = agent_package_root / f"usr/share/{AGENT_PACKAGE_NAME}/py"
         # create copies of the agent_main.py with python2 and python3 shebang.
         agent_main_path = agent_source_root / "scalyr_agent/agent_main.py"
         agent_main_py2_path = agent_source_root / "scalyr_agent/agent_main_py2.py"
@@ -487,6 +487,7 @@ class ManagedPackagesBuilder(Runner):
                     *self.python_package_build_cmd_args,
                     "-v", final_python_version,
                     "-C", str(package_root),
+                    "--verbose"
                 ],
                 cwd=str(self.packages_output_path)
             )
@@ -528,6 +529,7 @@ class ManagedPackagesBuilder(Runner):
                     "-v", final_agent_libs_version,
                     "-C", str(package_root),
                     "--depends", f"scalyr-agent-python3 = {final_python_version}",
+                    "--verbose"
                 ],
                 cwd=str(self.packages_output_path)
             )
@@ -974,6 +976,14 @@ def create_build_dependencies_step(
         "ZLIB_VERSION": "1.2.13",
         "BZIP_VERSION": "1.0.8",
     }
+    settings = None
+
+    if architecture != Architecture.X86_64:
+        settings = GitHubActionsSettings(
+            cacheable=True,
+            run_in_remote_docker=True
+        )
+
 
     download_build_dependencies = ArtifactRunnerStep(
         name="download_build_dependencies",
@@ -989,6 +999,7 @@ def create_build_dependencies_step(
         environment_variables={
             **build_dependencies_versions
         },
+        github_actions_settings=settings
 
     )
     openssl_configure_platforms = {
@@ -1007,20 +1018,33 @@ def create_build_dependencies_step(
             "OPENSSL_CONFIGURE_PLATFORM": openssl_configure_platforms[architecture],
             **build_dependencies_versions,
         },
-        github_actions_settings=GitHubActionsSettings(
-            cacheable=True
-        )
+        github_actions_settings=settings
     )
 
 
 def create_build_python_step(
-        base_step: EnvironmentRunnerStep
+        base_step: EnvironmentRunnerStep,
+        architecture: Architecture,
+        libssl_dir: str,
 ):
     """
     Function that creates step instance that build Python interpreter.
     :param base_step: Step with environment where to build.
     :return: Result step.
     """
+
+    python_config_architectures = {
+        Architecture.X86_64: "x86_64",
+        Architecture.ARM64: "aarch64"
+    }
+
+    settings = None
+    if architecture != Architecture.X86_64:
+        settings = GitHubActionsSettings(
+            cacheable=True,
+            run_in_remote_docker=True
+        )
+
     return ArtifactRunnerStep(
         name="build_python",
         script_path="agent_build_refactored/managed_packages/steps/build_python.sh",
@@ -1032,17 +1056,18 @@ def create_build_python_step(
             "PYTHON_VERSION": EMBEDDED_PYTHON_VERSION,
             "PYTHON_SHORT_VERSION": EMBEDDED_PYTHON_SHORT_VERSION,
             "PYTHON_INSTALL_PREFIX": "/usr",
+            "LIBSSL_DIR": libssl_dir,
+            "PYTHON_CONFIG_ARCHITECTURE": python_config_architectures[base_step.architecture],
             "SUBDIR_NAME": AGENT_DEPENDENCY_PACKAGE_SUBDIR_NAME
         },
-        github_actions_settings=GitHubActionsSettings(
-            cacheable=True
-        )
+        github_actions_settings=settings
     )
 
 
 def create_build_agent_libs_step(
         base_step: EnvironmentRunnerStep,
-        build_python_step: ArtifactRunnerStep
+        build_python_step: ArtifactRunnerStep,
+        architecture: Architecture
 ):
     """
     Function that creates step that installs agent requirement libraries.
@@ -1050,6 +1075,14 @@ def create_build_agent_libs_step(
     :param build_python_step: Required step that builds Python.
     :return: Result step.
     """
+
+    settings = None
+    if architecture != Architecture.X86_64:
+        settings = GitHubActionsSettings(
+            cacheable=True,
+            run_in_remote_docker=True
+        )
+
     return ArtifactRunnerStep(
         name="build_agent_libs",
         script_path="agent_build_refactored/managed_packages/steps/build_agent_libs.sh",
@@ -1066,9 +1099,7 @@ def create_build_agent_libs_step(
             "RUST_VERSION": "1.63.0",
             "SUBDIR_NAME": AGENT_DEPENDENCY_PACKAGE_SUBDIR_NAME
         },
-        github_actions_settings=GitHubActionsSettings(
-            cacheable=True
-        )
+        github_actions_settings=settings
     )
 
 
@@ -1094,7 +1125,8 @@ INSTALL_GCC_7_GLIBC_ARM64 = EnvironmentRunnerStep(
             platform=DockerPlatform.ARM64.value
         ),
         github_actions_settings=GitHubActionsSettings(
-            cacheable=True
+            cacheable=True,
+            run_in_remote_docker=True
         )
     )
 
@@ -1110,71 +1142,78 @@ INSTALL_BUILD_DEPENDENCIES_GLIBC_ARM64 = create_build_dependencies_step(
 
 # Create step that builds Python interpreter.
 BUILD_PYTHON_GLIBC_X86_64 = create_build_python_step(
-    base_step=INSTALL_BUILD_DEPENDENCIES_GLIBC_X86_64
+    base_step=INSTALL_BUILD_DEPENDENCIES_GLIBC_X86_64,
+    architecture=Architecture.X86_64,
+    libssl_dir="lib64"
 )
 
 BUILD_PYTHON_GLIBC_ARM64 = create_build_python_step(
-    base_step=INSTALL_BUILD_DEPENDENCIES_GLIBC_ARM64
+    base_step=INSTALL_BUILD_DEPENDENCIES_GLIBC_ARM64,
+    architecture=Architecture.ARM64,
+    libssl_dir="lib"
 )
 
 # Create step that builds agent requirement libs.
 BUILD_AGENT_LIBS_GLIBC_X86_64 = create_build_agent_libs_step(
     base_step=INSTALL_BUILD_DEPENDENCIES_GLIBC_X86_64,
-    build_python_step=BUILD_PYTHON_GLIBC_X86_64
+    build_python_step=BUILD_PYTHON_GLIBC_X86_64,
+    architecture=Architecture.X86_64,
 )
 BUILD_AGENT_LIBS_GLIBC_ARM64 = create_build_agent_libs_step(
-    base_step=INSTALL_BUILD_DEPENDENCIES_GLIBC_X86_64,
-    build_python_step=BUILD_PYTHON_GLIBC_ARM64
+    base_step=INSTALL_BUILD_DEPENDENCIES_GLIBC_ARM64,
+    build_python_step=BUILD_PYTHON_GLIBC_ARM64,
+    architecture=Architecture.ARM64
 )
 
-# Create step that prepare environment with all needed tools.
-PREPARE_TOOLSET_GLIBC_X86_64 = EnvironmentRunnerStep(
-    name="prepare_toolset",
-    script_path="agent_build_refactored/managed_packages/steps/prepare_toolset.sh",
-    base=DockerImageSpec(
-        name="ubuntu:22.04",
-        platform=DockerPlatform.AMD64.value
-    ),
-    required_steps={
-        "BUILD_PYTHON": BUILD_PYTHON_GLIBC_X86_64,
-        "BUILD_AGENT_LIBS": BUILD_AGENT_LIBS_GLIBC_X86_64
-    },
-    environment_variables={
-        "SUBDIR_NAME": AGENT_DEPENDENCY_PACKAGE_SUBDIR_NAME,
-        "FPM_VERSION": "1.14.2",
-        "PACKAGECLOUD_VERSION": "0.3.11",
-        "USER_NAME": subprocess.check_output("whoami").decode().strip(),
-        "USER_ID": str(os.getuid()),
-        "USER_GID": str(os.getgid()),
-    },
-    github_actions_settings=GitHubActionsSettings(
-        cacheable=True
-    )
+
+def create_prepare_toolset_step(
+    build_python_step: ArtifactRunnerStep,
+    build_agent_libs_step: ArtifactRunnerStep,
+    architecture: Architecture
+):
+    """
+    Create step that prepare environment with all needed tools.
+    """
+
+    run_in_remote_docker = False
+    if architecture != Architecture.X86_64:
+        run_in_remote_docker = True
+
+    return EnvironmentRunnerStep(
+        name="prepare_toolset",
+        script_path="agent_build_refactored/managed_packages/steps/prepare_toolset.sh",
+        base=DockerImageSpec(
+            name="ubuntu:22.04",
+            platform=architecture.as_docker_platform.value
+        ),
+        required_steps={
+            "BUILD_PYTHON": build_python_step,
+            "BUILD_AGENT_LIBS": build_agent_libs_step
+        },
+        environment_variables={
+            "SUBDIR_NAME": AGENT_DEPENDENCY_PACKAGE_SUBDIR_NAME,
+            "FPM_VERSION": "1.14.2",
+            "PACKAGECLOUD_VERSION": "0.3.11",
+            "USER_NAME": subprocess.check_output("whoami").decode().strip(),
+            "USER_ID": str(os.getuid()),
+            "USER_GID": str(os.getgid()),
+        },
+        github_actions_settings=GitHubActionsSettings(
+            cacheable=True,
+        )
 )
 
-# Create step that prepare environment with all needed tools.
-PREPARE_TOOLSET_GLIBC_ARM64 = EnvironmentRunnerStep(
-    name="prepare_toolset",
-    script_path="agent_build_refactored/managed_packages/steps/prepare_toolset.sh",
-    base=DockerImageSpec(
-        name="ubuntu:22.04",
-        platform=DockerPlatform.AMD64.value
-    ),
-    required_steps={
-        "BUILD_PYTHON": BUILD_PYTHON_GLIBC_ARM64,
-        "BUILD_AGENT_LIBS": BUILD_AGENT_LIBS_GLIBC_ARM64
-    },
-    environment_variables={
-        "SUBDIR_NAME": AGENT_DEPENDENCY_PACKAGE_SUBDIR_NAME,
-        "FPM_VERSION": "1.14.2",
-        "PACKAGECLOUD_VERSION": "0.3.11",
-        "USER_NAME": subprocess.check_output("whoami").decode().strip(),
-        "USER_ID": str(os.getuid()),
-        "USER_GID": str(os.getgid()),
-    },
-    github_actions_settings=GitHubActionsSettings(
-        cacheable=True
-    )
+
+PREPARE_TOOLSET_GLIBC_X86_64 = create_prepare_toolset_step(
+    build_python_step=BUILD_PYTHON_GLIBC_X86_64,
+    build_agent_libs_step=BUILD_AGENT_LIBS_GLIBC_X86_64,
+    architecture=Architecture.X86_64
+)
+
+PREPARE_TOOLSET_GLIBC_ARM64 = create_prepare_toolset_step(
+    build_python_step=BUILD_PYTHON_GLIBC_ARM64,
+    build_agent_libs_step=BUILD_AGENT_LIBS_GLIBC_ARM64,
+    architecture=Architecture.ARM64
 )
 
 

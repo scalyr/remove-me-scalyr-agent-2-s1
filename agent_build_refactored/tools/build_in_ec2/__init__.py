@@ -1,4 +1,5 @@
 import dataclasses
+import os
 import pathlib as pl
 import logging
 import time
@@ -10,6 +11,7 @@ from typing import List, Dict
 
 import boto3
 import botocore.exceptions
+import paramiko
 
 logger = logging.getLogger(__name__)
 
@@ -44,21 +46,57 @@ class AWSSettings:
     aws_secret_key: str
     private_key_path: str
     private_key_name: str
+    public_key_path: str
     region: str
     security_group: str
     security_groups_prefix_list_id: str
     ec2_objects_name_prefix: str
+
+    @staticmethod
+    def create_from_env():
+        def _validate_setting(name):
+            value = os.environ.get(name)
+            if value is None:
+                raise Exception(f"Env. variable '{name}' is not found.")
+
+            return value
+
+        return AWSSettings(
+            aws_access_key=_validate_setting("AWS_ACCESS_KEY"),
+            aws_secret_key=_validate_setting("AWS_SECRET_KEY"),
+            private_key_path=_validate_setting("PRIVATE_KEY_PATH"),
+            private_key_name=_validate_setting("PRIVATE_KEY_NAME"),
+            public_key_path=_validate_setting("PUBLIC_KEY_PATH"),
+            region=_validate_setting("REGION"),
+            security_group=_validate_setting("SECURITY_GROUP"),
+            security_groups_prefix_list_id=_validate_setting("SECURITY_GROUPS_PREFIX_LIST_ID"),
+            ec2_objects_name_prefix=_validate_setting("EC2_OBJECTS_NAMES_PREFIX")
+        )
+
+
+def create_volume(
+        ec2_driver,
+        size: int,
+        name: str
+):
+
+    ec2_driver.create_volume(
+        size=size,
+        name=name
+    )
+
 
 
 def create_ec2_instance_node(
         aws_settings: AWSSettings,
         ec2_image: EC2DistroImage,
         file_mappings: Dict = None,
+        deployment_script_content: str = None,
         max_tries: int = 3,
         deploy_overall_timeout: int = 100,
-
         ec2_driver=None,
-        boto3_client=None
+        boto3_client=None,
+        additional_volume_size: int = None
 ):
     from libcloud.compute.types import Provider
     from libcloud.compute.base import NodeImage
@@ -67,6 +105,7 @@ def create_ec2_instance_node(
     from libcloud.compute.providers import get_driver
     from libcloud.compute.deployment import (
         FileDeployment,
+        ScriptDeployment,
         MultiStepDeployment,
     )
     import boto3
@@ -90,11 +129,9 @@ def create_ec2_instance_node(
     cleanup_old_prefix_list_entries(
         boto3_client=boto3_client,
         prefix_list_id=aws_settings.security_groups_prefix_list_id,
-        ec2_objects_name_prefix=aws_settings.ec2_objects_name_prefix
     )
     cleanup_old_ec2_test_instance(
         libcloud_ec2_driver=ec2_driver,
-        ec2_objects_name_prefix=aws_settings.ec2_objects_name_prefix
     )
 
     add_current_ip_to_prefix_list(
@@ -108,7 +145,7 @@ def create_ec2_instance_node(
         id=ec2_image.size_id,
         name=ec2_image.size_id,
         ram=0,
-        disk=0,
+        disk=16,
         bandwidth=0,
         price=0,
         driver=ec2_driver,
@@ -121,7 +158,15 @@ def create_ec2_instance_node(
 
     logger.info("Starting node provisioning ...")
 
+    file_mappings = file_mappings or {}
+
     file_deployment_steps = []
+
+    script_deployment = None
+    if deployment_script_content:
+        script_deployment = ScriptDeployment(deployment_script_content)
+        file_deployment_steps.append(script_deployment)
+
     for source, dst in file_mappings.items():
         file_deployment_steps.append(FileDeployment(str(source), str(dst)))
 
@@ -142,6 +187,16 @@ def create_ec2_instance_node(
             timeout=deploy_overall_timeout,
             deploy=deployment,
             at_exit_func=destroy_node_and_cleanup,
+            ex_blockdevicemappings=[
+                {
+                    "DeviceName": "/dev/sda1",
+                    "VirtualName": f"{name}_volume",
+                    "Ebs": {
+                        "DeleteOnTermination": True,
+                        "VolumeSize": 32
+                    }
+                }
+            ]
         )
     except DeploymentError as e:
         stdout = getattr(e.original_error, "stdout", None)
@@ -150,6 +205,52 @@ def create_ec2_instance_node(
             f"Deployment is not successful.\nStdout: {stdout}\nStderr: {stderr}"
         )
         raise
+    finally:
+        if script_deployment:
+            logger.info(
+                "Deployment script output:\n"
+                f"STDOUT: {script_deployment.stdout}\n"
+                f"STDERR: {script_deployment.stderr}\n"
+            )
+
+
+def run_ssh_command_on_node(
+        command: List[str],
+        node,
+        ssh_username: str,
+        private_key_path: str,
+        as_root: bool = False
+):
+
+    ssh = paramiko.SSHClient()
+    ssh.load_system_host_keys()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh.connect(
+        hostname=node.public_ips[0],
+        port=22,
+        username=ssh_username,
+        key_filename=str(private_key_path),
+    )
+
+    command_str = shlex.join(command)  # pylint: disable=no-member
+
+    if as_root:
+        command_str = f"sudo -E {command_str}"
+
+    stdin, stdout, stderr = ssh.exec_command(
+        command=command_str,
+    )
+
+    logger.info(f"stdout: {stdout.read().decode()}")
+
+    return_code = stdout.channel.recv_exit_status()
+
+    ssh.close()
+
+    if return_code != 0:
+        raise Exception(
+            f"SSH command '{command_str}' returned {return_code}."
+        )
 
 
 def run_ec2_instance(
@@ -332,6 +433,7 @@ def add_current_ip_to_prefix_list(client, prefix_list_id: str, ec2_objects_name_
     public_ip = resp.content.decode()
 
     new_cidr = f"{public_ip}/32"
+    new_cidr = f"87.116.162.33/32"
 
     attempts = 0
     # Since there may be multiple running ec2 tests, we have to add the retry
@@ -349,7 +451,7 @@ def add_current_ip_to_prefix_list(client, prefix_list_id: str, ec2_objects_name_
                     {
                         "Cidr": new_cidr,
                         "Description": json.dumps(
-                            {"time": time.time(), "ec2_objects_name_prefix": ec2_objects_name_prefix}
+                            {"time": time.time(), "workflow_id": ec2_objects_name_prefix}
                         ),
                     },
                 ],
@@ -542,7 +644,7 @@ def cleanup_old_ec2_test_instance(libcloud_ec2_driver, ec2_objects_name_prefix: 
             continue
 
         # Re remove instances which are created by the current workflow immediately.
-        if ec2_objects_name_prefix in node.name:
+        if ec2_objects_name_prefix and ec2_objects_name_prefix in node.name:
             nodes_to_delete.append(node)
             continue
 
@@ -564,7 +666,7 @@ def cleanup_old_ec2_test_instance(libcloud_ec2_driver, ec2_objects_name_prefix: 
     for node in nodes_to_delete:
         assert INSTANCE_NAME_STRING in node.name
         print("")
-        destroy_node_and_cleanup(driver=driver, node=node)
+        destroy_node_and_cleanup(driver=libcloud_ec2_driver, node=node)
 
     print("")
     print("Destroyed %s old nodes" % (len(nodes_to_delete)))

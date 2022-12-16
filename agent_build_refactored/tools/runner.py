@@ -25,7 +25,7 @@ import logging
 import inspect
 import subprocess
 import sys
-from typing import Union, Optional, List, Dict, Type
+from typing import Union, Optional, List, Dict, Type, Callable
 
 
 from agent_build_refactored.tools.constants import SOURCE_ROOT, DockerPlatformInfo, Architecture
@@ -38,9 +38,9 @@ from agent_build_refactored.tools import (
     IN_DOCKER,
     IN_CICD,
 )
-from agent_build_refactored.tools.build_on_ec2 import run_ec2_instance, EC2DistroImage, create_ec2_instance_node, AWSSettings
+from agent_build_refactored.tools.build_on_ec2 import run_ec2_instance, EC2DistroImage, create_ec2_instance_node, AWSSettings, run_ssh_command_on_node, create_volume
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def remove_directory_in_docker(path: pl.Path):
@@ -72,13 +72,16 @@ class DockerImageSpec:
     name: str
     platform: DockerPlatformInfo
 
-    def save_docker_image(self, output_path: pl.Path):
+    def save_docker_image(self, output_path: pl.Path, remote_docker_host: str = None):
         """
         Serialize docker image into file by using 'docker save' command.
         :param output_path: Result output file.
+        :param remote_docker_host: String with remote docker engine.
         """
-
-        check_call_with_log(["docker", "save", self.name, "--output", str(output_path)])
+        run_docker_command(
+            ["save", self.name, "--output", str(output_path)],
+            remote_docker_host=remote_docker_host
+        )
 
 
 @dataclasses.dataclass
@@ -91,6 +94,7 @@ class GitHubActionsSettings:
     # Flag that indicates that this step has to be executed in a separate job during GHA CI/CD run.
     # In case of multiple, long-running steps, this has to decrease overall build time.
     pre_build_in_separate_job: bool = False
+    run_in_remote_docker: bool = False
 
 
 class RunnerStep:
@@ -294,7 +298,7 @@ class RunnerStep:
 
         for step_env_var_name, step in self.required_steps.items():
             step_out_dir = step.get_output_directory(work_dir=work_dir)
-            step_dir = pl.Path("/tmp/required_steps") / step_out_dir.name
+            step_dir = pl.Path("/tmp") / f"required_step_{step_out_dir.name}"
             result[step_env_var_name] = step_dir
 
         return result
@@ -376,7 +380,18 @@ class RunnerStep:
         Searches for cached results, if found, then they are reused and the run is skipped.
         :return: Boolean that indicates that the cache is found and step can be skipped.
         """
-        pass
+        if cache_directory.exists():
+            if output_directory.exists():
+                if output_directory.is_symlink():
+                    output_directory.unlink()
+                else:
+                    shutil.rmtree(output_directory)
+
+            symlink_rel_path = pl.Path("../step_cache") / output_directory.name
+            output_directory.symlink_to(symlink_rel_path)
+            return True
+
+        return False
 
     def _save_to_cache(
         self, is_skipped: bool, output_directory: pl.Path, cache_directory: pl.Path
@@ -385,7 +400,8 @@ class RunnerStep:
         Saved results of the finished step to cache, if needed.
         :param is_skipped: Boolean flag that indicates that the main run method has been skipped.
         """
-        pass
+        if not is_skipped:
+            shutil.copytree(output_directory, cache_directory, dirs_exist_ok=True, symlinks=True)
 
     def _pre_run(self) -> bool:
         """Function that runs after the step main run function."""
@@ -397,10 +413,9 @@ class RunnerStep:
         """
         pass
 
-    def _run_script(
+    def _run_script_locally(
         self,
         work_dir: pl.Path,
-        remote_docker_host: str
     ):
         """
         Run the step's script, whether in docker or in current system.
@@ -413,82 +428,169 @@ class RunnerStep:
         output_directory = self.get_output_directory(work_dir=work_dir)
         output_directory.mkdir(parents=True, exist_ok=True)
 
-        if self.runs_in_docker:
-            final_isolated_source_root = pl.Path("/tmp/agent_source")
-            final_cache_directory = "/tmp/step_cache"
-            final_output_directory = "/tmp/step_output"
-        else:
-            final_isolated_source_root = isolated_source_root
-            final_cache_directory = cache_directory
-            final_output_directory = output_directory
-
-        if self.script_path.suffix == ".py":
-            script_type = "python"
-        else:
-            script_type = "shell"
-
-        command_args = [
-            "env",
-            "bash",
-            # For the bash scripts, there is a special 'step_runner.sh' bash file that runs the given shell script
-            # and also provides some helper functions such as caching.
-            "agent_build_refactored/tools/steps_libs/step_runner.sh",
-            str(self.script_path),
-            str(final_cache_directory),
-            str(final_output_directory),
-            script_type,
-        ]
-
         env_variables_to_pass = self._get_all_environment_variables(work_dir=work_dir)
 
-        # Run step directly on the current system
-        if not self.runs_in_docker:
-            env = os.environ.copy()
+        # Run step locally.
+        env = os.environ.copy()
 
-            python_path = env.get("PYTHONPATH", "")
-            for p in python_path.split(os.pathsep):
-                p = pl.Path(p)
-                if not str(p).startswith(str(SOURCE_ROOT)):
-                    continue
-                new_p = isolated_source_root / p.relative_to(SOURCE_ROOT)
-                python_path = python_path.replace(str(p), str(new_p))
+        python_path = env.get("PYTHONPATH", "")
+        for p in python_path.split(os.pathsep):
+            p = pl.Path(p)
+            if not str(p).startswith(str(SOURCE_ROOT)):
+                continue
+            new_p = isolated_source_root / p.relative_to(SOURCE_ROOT)
+            python_path = python_path.replace(str(p), str(new_p))
 
-            python_path = f"{python_path}{os.pathsep}{isolated_source_root}"
-            env["PYTHONPATH"] = python_path
+        python_path = f"{python_path}{os.pathsep}{isolated_source_root}"
+        env["PYTHONPATH"] = python_path
 
-            env.update(env_variables_to_pass)
-            check_call_with_log(command_args, env=env, cwd=str(isolated_source_root))
-            return
+        env.update(env_variables_to_pass)
+
+        command_args = self._get_command_args(
+            cache_directory=cache_directory,
+            output_directory=output_directory
+        )
+
+        check_call_with_log(command_args, env=env, cwd=str(isolated_source_root))
+
+    def _run_script_in_docker(
+            self,
+            work_dir: pl.Path, remote_docker_host: str):
+
+        isolated_source_root = self.get_isolated_root(work_dir=work_dir)
+        cache_directory = self.get_cache_directory(work_dir=work_dir)
+        output_directory = self.get_output_directory(work_dir=work_dir)
+
+        in_docker_isolated_source_root = pl.Path("/tmp/agent_source")
+        in_docker_cache_directory = pl.Path("/tmp/step_cache")
+        in_docker_output_directory = pl.Path("/tmp/step_output")
 
         # Run step in docker.
-        check_call_with_log(["docker", "rm", "-f", self._step_container_name])
-
         required_steps_directories = self._get_required_steps_output_directories(
             work_dir=work_dir
         )
         required_steps_docker_directories = self._get_required_steps_docker_output_directories(
             work_dir=work_dir
         )
-        mount_options = []
+
+        required_step_mounts = {}
         for step_env_var_name, step_output_path in required_steps_directories.items():
             step_docker_output_path = required_steps_docker_directories[step_env_var_name]
-            mount_options.extend(["-v", f"{step_output_path}:{step_docker_output_path}"])
+            required_step_mounts[step_output_path] = step_docker_output_path
 
-        # Mount isolated source root, output path and cache to be able to use them later.
-        mount_options.extend(
-            [
-                "-v",
-                f"{isolated_source_root}:{final_isolated_source_root}",
-                "-v",
-                f"{cache_directory}:{final_cache_directory}",
-                "-v",
-                f"{output_directory}:{final_output_directory}",
-            ]
-        )
+        env_variables_to_pass = self._get_all_environment_variables(work_dir=work_dir)
 
         env_options = []
         for env_var_name, env_var_val in env_variables_to_pass.items():
             env_options.extend(["-e", f"{env_var_name}={env_var_val}"])
+
+        self._prepare_base_image(
+            work_dir=work_dir,
+            remote_docker_host=remote_docker_host
+        )
+
+        run_docker_command(["rm", "-f", self._step_container_name], remote_docker_host=remote_docker_host)
+
+        command_args = self._get_command_args(
+            cache_directory=in_docker_cache_directory,
+            output_directory=in_docker_output_directory
+        )
+
+        if remote_docker_host is None:
+
+            self._run_script_in_local_docker(
+                command=command_args,
+                isolated_source_root_path=in_docker_isolated_source_root,
+                env_options=env_options,
+                mounts={
+                isolated_source_root: in_docker_isolated_source_root,
+                cache_directory: in_docker_cache_directory,
+                output_directory: in_docker_output_directory,
+                **required_step_mounts
+            }
+            )
+        else:
+            self._run_script_in_remote_docker(
+                command=command_args,
+                isolated_source_root_path=in_docker_isolated_source_root,
+                env_options=env_options,
+                input_copies={
+                    f"{isolated_source_root}/.": in_docker_isolated_source_root,
+                    **{f"{src}/.": dst for src, dst in required_step_mounts.items()},
+                    f"{output_directory}/.": in_docker_output_directory,
+                    f"{cache_directory}/.": in_docker_cache_directory
+                },
+                output_copies={
+                    f"{in_docker_output_directory}/.": output_directory,
+                    f"{in_docker_cache_directory}/.": cache_directory
+                },
+                remote_docker_host=remote_docker_host
+            )
+
+    def _prepare_base_image(self, work_dir: pl.Path, remote_docker_host: str = None):
+
+        # Before the run, check if there is already an image with the same name. The name contains the checksum
+        # of all files which are used in it, so the name identity also guarantees the content identity.
+        if self._base_step is None:
+            return
+
+        output_bytes = run_docker_command(
+            ["images", "-q", self.name],
+            remote_docker_host=remote_docker_host,
+            return_output=True
+        )
+        output = output_bytes.decode().strip()
+
+        if output:
+            return
+
+        output_directory = self._base_step.get_output_directory(work_dir=work_dir)
+        image_path = output_directory / self._base_docker_image.name
+
+        logger.info(f"Loading image {self._base_docker_image.name} from file {image_path}.")
+
+        if remote_docker_host:
+            logger.info("    Loading to remote host, it may take some time.")
+        run_docker_command(
+            ["load", "-i", str(image_path)],
+            remote_docker_host=remote_docker_host
+        )
+
+    def _get_command_args(self, cache_directory: pl.Path, output_directory: pl.Path):
+        if self.script_path.suffix == ".py":
+            script_type = "python"
+        else:
+            script_type = "shell"
+
+        return [
+            "env",
+            "bash",
+            # For the bash scripts, there is a special 'step_runner.sh' bash file that runs the given shell script
+            # and also provides some helper functions such as caching.
+            "agent_build_refactored/tools/steps_libs/step_runner.sh",
+            str(self.script_path),
+            str(cache_directory),
+            str(output_directory),
+            script_type,
+        ]
+
+    def _run_script_in_local_docker(
+            self,
+            command: List[str],
+            isolated_source_root_path: pl.Path,
+            env_options: List,
+            mounts: Dict,
+
+    ):
+
+        # Mount isolated source root, output path and cache to be able to use them later.
+
+        mount_options = []
+        for src, dst in mounts.items():
+            mount_options.extend([
+                "-v",
+                f"{src}:{dst}"
+            ])
 
         check_call_with_log(
             [
@@ -498,17 +600,102 @@ class RunnerStep:
                 "--name",
                 self._step_container_name,
                 "--workdir",
-                str(final_isolated_source_root),
+                str(isolated_source_root_path),
                 "--user",
                 self.user,
+                "--platform",
+                str(self.architecture.as_docker_platform.value),
                 *mount_options,
                 *env_options,
                 self._base_docker_image.name,
-                *command_args,
+                *command,
             ]
         )
 
-    def run(self, work_dir: pl.Path, remote_docker_host: str = None):
+    def _run_script_in_remote_docker(
+            self,
+            command: List[str],
+            env_options: List,
+            input_copies: Dict,
+            output_copies: Dict,
+            isolated_source_root_path: pl.Path,
+            remote_docker_host: str
+    ):
+        # Create intermediate container
+        run_docker_command(
+            ["rm", "-f", self._step_container_name],
+            remote_docker_host=remote_docker_host
+        )
+
+        run_docker_command(
+            [
+                "create",
+                "--name",
+                self._step_container_name,
+                "--workdir",
+                str(isolated_source_root_path),
+                "--user",
+                self.user,
+                "--platform",
+                str(self.architecture.as_docker_platform.value),
+                *env_options,
+                self._base_docker_image.name,
+                *command,
+                #"ls", "-a"
+                #"pwd"
+                # "sleep",
+                # "100000"
+            ],
+            remote_docker_host=remote_docker_host
+        )
+
+        # Instead of mounting we have to copy files to an intermediate container,
+        # because mounts does not work with remote docker.
+        for src, dst in input_copies.items():
+            run_docker_command(
+                [
+                    "cp",
+                    "-a",
+                    "-L",
+                    str(src),
+                    f"{self._step_container_name}:{dst}"
+                ],
+                remote_docker_host=remote_docker_host
+            )
+
+        run_docker_command(
+            [
+                "start",
+                "-i",
+                self._step_container_name,
+            ],
+            remote_docker_host=remote_docker_host
+        )
+
+        for src, dst in output_copies.items():
+            run_docker_command(
+                [
+                    "cp",
+                    "-a",
+                    f"{self._step_container_name}:/{src}",
+                    str(dst),
+                ],
+                remote_docker_host=remote_docker_host
+            )
+
+    def should_run(self, work_dir: pl.Path):
+        output_directory = self.get_output_directory(work_dir)
+        cache_directory = self.get_cache_directory(work_dir)
+
+        output_directory.parent.mkdir(parents=True, exist_ok=True)
+        cache_directory.parent.mkdir(parents=True, exist_ok=True)
+
+        skipped = self._restore_cache(output_directory=output_directory, cache_directory=cache_directory)
+        if skipped:
+            logger.info(f"Result of the step '{self.id}' is found in cache, skip.")
+            return False
+
+    def run(self, work_dir: pl.Path, remote_docker_host_getter: Callable[['RunnerStep'], str] = None):
         """
         Run the step. Based on its initial data, it will be executed in docker or locally, on the current system.
         """
@@ -519,19 +706,18 @@ class RunnerStep:
 
         output_directory.parent.mkdir(parents=True, exist_ok=True)
         cache_directory.parent.mkdir(parents=True, exist_ok=True)
-        skipped = self._restore_cache(
-            output_directory=output_directory, cache_directory=cache_directory
-        )
+
+        skipped = self._restore_cache(output_directory=output_directory, cache_directory=cache_directory)
         if skipped:
-            log.info(f"Result of the step '{self.id}' is found in cache, skip.")
+            logger.info(f"Result of the step '{self.id}' is found in cache, skip.")
             return
 
         logging.info(f"Run step {self.name}.")
         for step in self.required_steps.values():
-            step.run(work_dir=work_dir)
+            step.run(work_dir=work_dir, remote_docker_host_getter=remote_docker_host_getter)
 
         if self._base_step:
-            self._base_step.run(work_dir=work_dir)
+            self._base_step.run(work_dir=work_dir, remote_docker_host_getter=remote_docker_host_getter)
 
         self._remove_output_directory(output_directory=output_directory)
         output_directory.mkdir(parents=True, exist_ok=True)
@@ -555,8 +741,17 @@ class RunnerStep:
             f"Start step: {self.id}\n"
             f"Passed env. variables:\n    {env_variables_str}\n"
         )
+
+        self.get_isolated_root(work_dir=work_dir).mkdir(parents=True, exist_ok=True)
+        self.get_cache_directory(work_dir=work_dir).mkdir(parents=True, exist_ok=True)
+        self.get_output_directory(work_dir=work_dir).mkdir(parents=True, exist_ok=True)
+
         try:
-            self._run_script(work_dir=work_dir, remote_docker_host=remote_docker_host)
+            if self.runs_in_docker:
+                remote_docker_host = remote_docker_host_getter(self)
+                self._run_script_in_docker(work_dir=work_dir, remote_docker_host=remote_docker_host)
+            else:
+                self._run_script_locally(work_dir=work_dir)
         except Exception:
             files = [str(g) for g in self._tracked_files]
             logging.exception(
@@ -566,16 +761,12 @@ class RunnerStep:
             )
             raise
 
-        self._save_to_cache(
-            is_skipped=skipped,
-            output_directory=output_directory,
-            cache_directory=cache_directory,
-        )
+        self._save_to_cache(is_skipped=skipped, output_directory=output_directory, cache_directory=cache_directory)
         self.cleanup()
 
     def cleanup(self):
         if self._step_container_name:
-            check_call_with_log(["docker", "rm", "-f", self._step_container_name])
+            run_docker_command(["rm", "-f", self._step_container_name])
 
     def __eq__(self, other: "RunnerStep"):
         return self.id == other.id
@@ -586,23 +777,20 @@ class ArtifactRunnerStep(RunnerStep):
     Specialised step which produces some artifact as a result of its execution.
     """
 
-    def _restore_cache(
-        self, output_directory: pl.Path, cache_directory: pl.Path
-    ) -> bool:
-        self._remove_output_directory(output_directory=output_directory)
+    # def _restore_cache(self, output_directory: pl.Path, cache_directory: pl.Path) -> bool:
+    #     self._remove_output_directory(output_directory=output_directory)
+    #
+    #     if cache_directory.exists():
+    #         symlink_rel_path = pl.Path("../step_cache") / output_directory.name
+    #         output_directory.symlink_to(symlink_rel_path)
+    #         return True
+    #
+    #     return False
 
-        if cache_directory.exists():
-            symlink_rel_path = pl.Path("../step_cache") / output_directory.name
-            output_directory.symlink_to(symlink_rel_path)
-            return True
-
-        return False
-
-    def _save_to_cache(
-        self, is_skipped: bool, output_directory: pl.Path, cache_directory: pl.Path
-    ):
-        if not is_skipped:
-            shutil.copytree(output_directory, cache_directory, dirs_exist_ok=True, symlinks=True)
+    # def _save_to_cache(self, is_skipped: bool, output_directory: pl.Path, cache_directory: pl.Path,
+    #                    remote_docker_host: str = None):
+    #     if not is_skipped:
+    #         shutil.copytree(output_directory, cache_directory, dirs_exist_ok=True, symlinks=True)
 
 
 class EnvironmentRunnerStep(RunnerStep):
@@ -613,56 +801,90 @@ class EnvironmentRunnerStep(RunnerStep):
         If step does not run in docker, then its actions are executed directly on current system.
     """
 
-    def _restore_cache(
-        self, output_directory: pl.Path, cache_directory: pl.Path
-    ) -> bool:
-        if not self.runs_in_docker:
-            return False
+    # def _restore_cache(self, output_directory: pl.Path, cache_directory: pl.Path) -> bool:
+    #     if not self.runs_in_docker:
+    #         return False
+    #
+    #     # # Before the run, check if there is already an image with the same name. The name contains the checksum
+    #     # # of all files which are used in it, so the name identity also guarantees the content identity.
+    #     # output_bytes = run_docker_command(
+    #     #     ["images", "-q", self.result_image.name],
+    #     #     return_output=True
+    #     #
+    #     # )
+    #     # output = output_bytes.decode().strip()
+    #     #
+    #     # if output:
+    #     #     # The image already exists, skip the run.
+    #     #     logging.info(
+    #     #         f"Image '{self.result_image.name}' already exists, skip and reuse it."
+    #     #     )
+    #     #     return True
+    #
+    #     # # If code runs in CI/CD, then check if the image file is already in cache, and we can reuse it.
+    #     # if common.IN_CICD:
+    #
+    #     # Check in step's cache for the image tarball.
+    #     cached_image_path = cache_directory / self.result_image.name
+    #     if cached_image_path.is_file():
+    #         logging.info(
+    #             f"Cached image {self.result_image.name} file for the step '{self.name}' has been found, "
+    #             f"loading and reusing it instead of building."
+    #         )
+    #         # run_docker_command(
+    #         #     ["load", "-i", str(cached_image_path)],
+    #         #     remote_docker_host=remote_docker_host
+    #         # )
+    #         return True
+    #
+    #     return False
 
-        # Before the run, check if there is already an image with the same name. The name contains the checksum
-        # of all files which are used in it, so the name identity also guarantees the content identity.
-        output_bytes = check_output_with_log(
-            ["docker", "images", "-q", self.result_image.name]
+    # def _save_to_cache(self, is_skipped: bool, output_directory: pl.Path, cache_directory: pl.Path,
+    #                    remote_docker_host:  str = None):
+    #
+    #     # Save results in cache if needed.
+    #     if not self.runs_in_docker or is_skipped:
+    #         return
+    #     # run_docker_command(
+    #     #     ["commit", self._step_container_name, self.result_image.name],
+    #     #     remote_docker_host=remote_docker_host
+    #     # )
+    #     cache_directory.mkdir(parents=True, exist_ok=True)
+    #     cached_image_path = cache_directory / self.result_image.name
+    #     logging.info(
+    #         f"Saving image '{self.result_image.name}' file for the step {self.name} into cache."
+    #     )
+    #     self.result_image.save_docker_image(output_path=cached_image_path, remote_docker_host=remote_docker_host)
+    #     if remote_docker_host:
+    #         run_docker_command(
+    #             ["load", "-i", str(cached_image_path)]
+    #         )
+
+    def _run_script_in_docker(
+            self,
+            work_dir: pl.Path, remote_docker_host: str):
+
+        super(EnvironmentRunnerStep, self)._run_script_in_docker(
+            work_dir=work_dir,
+            remote_docker_host=remote_docker_host
         )
-        output = output_bytes.decode().strip()
 
-        if output:
-            # The image already exists, skip the run.
-            logging.info(
-                f"Image '{self.result_image.name}' already exists, skip and reuse it."
-            )
-            return True
-
-        # # If code runs in CI/CD, then check if the image file is already in cache, and we can reuse it.
-        # if common.IN_CICD:
-
-        # Check in step's cache for the image tarball.
-        cached_image_path = cache_directory / self.result_image.name
-        if cached_image_path.is_file():
-            logging.info(
-                f"Cached image {self.result_image.name} file for the step '{self.name}' has been found, "
-                f"loading and reusing it instead of building."
-            )
-            check_call_with_log(["docker", "load", "-i", str(cached_image_path)])
-            return True
-
-        return False
-
-    def _save_to_cache(
-        self, is_skipped: bool, output_directory: pl.Path, cache_directory: pl.Path
-    ):
-        # Save results in cache if needed.
-        if not self.runs_in_docker or is_skipped:
-            return
-        check_call_with_log(
-            ["docker", "commit", self._step_container_name, self.result_image.name]
+        run_docker_command(
+            ["commit", self._step_container_name, self.result_image.name],
+            remote_docker_host=remote_docker_host
         )
-        cache_directory.mkdir(parents=True, exist_ok=True)
-        cached_image_path = cache_directory / self.result_image.name
-        logging.info(
-            f"Saving image '{self.result_image.name}' file for the step {self.name} into cache."
+
+        output_directory = self.get_output_directory(work_dir=work_dir)
+        image_path = output_directory / self.result_image.name
+
+        logger.info(f"Saving image {self.result_image.name}.")
+        if remote_docker_host:
+            logger.info("    Saving from remote docker, it may take some time.")
+        run_docker_command(
+            ["save", self.result_image.name, "--output", str(image_path)],
+            remote_docker_host=remote_docker_host
         )
-        self.result_image.save_docker_image(output_path=cached_image_path)
+
 
 
 @dataclasses.dataclass
@@ -848,8 +1070,21 @@ class Runner:
             "AGENT_BUILD_IN_DOCKER=1"
         ]
 
-        check_call_with_log([
-            "docker",
+        base_step_output = self.base_environment.get_output_directory(work_dir=self.work_dir)
+
+        base_image_path = base_step_output / self.base_environment.result_image.name
+
+        run_docker_command(
+            ["load", "-i", str(base_image_path)]
+        )
+
+        run_docker_command(
+            ["image", "ls"]
+        )
+
+        a=10
+
+        run_docker_command([
             "run",
             "-i",
             *mount_args,
@@ -857,9 +1092,8 @@ class Runner:
             f"{SOURCE_ROOT}:/tmp/source",
             *env_args,
             "--platform",
-            str(self.base_docker_image.platform),
-            "--user",
-            "root",
+            "linux/arm64",
+            #str(self.base_docker_image.platform),
             self.base_docker_image.name,
             python_executable,
             "/tmp/source/agent_build_refactored/scripts/runner_helper.py",
@@ -895,7 +1129,6 @@ class Runner:
         self._run_steps(
             steps=steps_to_run,
             work_dir=self.work_dir,
-            aws_settings=self._aws_settings
         )
 
 
@@ -909,45 +1142,61 @@ class Runner:
     def _run_steps(
             steps: List[RunnerStep],
             work_dir: pl.Path,
-            aws_settings=None
     ):
+        existing_ec2_builder_nodes = {}
 
-        if aws_settings is None:
-            ec2_builders = {}
-            required_ec2_builder_images = {}
-        else:
-            required_ec2_builder_images = {}
-            for step in steps:
-                ec2_image = DOCKER_EC2_BUILDERS.get(step.architecture)
-                if ec2_image is not None:
-                    required_ec2_builder_images[step.architecture] = ec2_image
+        def get_remote_docker_host_for_step(step: RunnerStep):
 
-        for arch, ec2_image in required_ec2_builder_images.items():
-            create_ec2_instance_node(
-                aws_settings=aws_settings,
-                ec2_image=ec2_image,
-            )
+            if not step.github_actions_settings.run_in_remote_docker:
+                return None
+
+            ec2_image = DOCKER_EC2_BUILDERS.get(step.architecture)
+            if ec2_image is None:
+                return None
+
+            aws_settings = AWSSettings.create_from_env()
+
+            node = existing_ec2_builder_nodes.get(step.architecture)
+
+            if node is None:
+
+                deployment_script_path = SOURCE_ROOT / "agent_build_refactored/tools/build_on_ec2/add_docker_host.sh"
+                deployment_script_content = deployment_script_path.read_text()
+
+                public_key_path = pl.Path(aws_settings.public_key_path)
+
+                node = create_ec2_instance_node(
+                    aws_settings=aws_settings,
+                    ec2_image=ec2_image,
+                    deployment_script_content=deployment_script_content,
+                    file_mappings={
+                        str(public_key_path): f"/home/{ec2_image.ssh_username}/.ssh/authorized_keys"
+                    },
+                )
+
+                existing_ec2_builder_nodes[step.architecture] = node
+
+                node_ip = node.public_ips[0]
+
+                new_known_host = subprocess.check_output(
+                    [
+                        "ssh-keyscan",
+                        "-H",
+                        node_ip,
+                    ],
+                ).decode()
+
+                known_hosts_file = pl.Path.home() / ".ssh/known_hosts"
+                known_hosts_file.write_text(
+                    f"{new_known_host}\n{known_hosts_file.read_text()}"
+                )
+
+            return f"ssh://{ec2_image.ssh_username}@{node.public_ips[0]}"
 
         for step in steps:
-            if aws_settings is None:
-                step.run(work_dir=work_dir)
-                continue
+            step.run(work_dir=work_dir, remote_docker_host_getter=get_remote_docker_host_for_step)
 
-            ec2_builder_node = ec2_builders.get(step.architecture)
-
-            if not ec2_builder_node:
-                if step.architecture not in DOCKER_EC2_BUILDERS:
-                    step.run(work_dir=work_dir)
-                    continue
-
-            ec2_builder_node = create_ec2_instance_node(
-                aws_settings=aws_settings,
-                ec2_image=DOCKER_EC2_BUILDERS[step.architecture],
-            )
-            ec2_builders[step.architecture] = ec2_builder_node
-
-            remote_docker_host = f"{ec2_builder_node.public_ips[0]:0}"
-            step.run(work_dir=work_dir, )
+        a=10
 
 
     @classmethod
@@ -1009,6 +1258,11 @@ class Runner:
             help="Name to a private key file. Required for running steps in ec2 instances.",
         )
         parser.add_argument(
+            "--aws-public-key-path",
+            required=False,
+            help="Path to a public key file. Required for running steps in in ec2 instances.",
+        )
+        parser.add_argument(
             "--aws-region",
             required=False,
             help="Name of a AWS region. Required for running steps in ec2 instances.",
@@ -1054,16 +1308,17 @@ class Runner:
                     aws_secret_key=args.aws_secret_key,
                     private_key_path=args.aws_private_key_path,
                     private_key_name=args.aws_private_key_name,
+                    public_key_path=args.aws_public_key_path,
                     region=args.aws_region,
                     security_group=args.aws_security_group,
                     security_groups_prefix_list_id=args.aws_security_groups_prefix_list_id,
                     ec2_objects_name_prefix=args.ec2_objects_name_prefix
                 )
 
+            #aws_settings=None
             cls._run_steps(
                 steps=steps,
                 work_dir=work_dir,
-                aws_settings=aws_settings
             )
             exit(0)
 
@@ -1073,14 +1328,46 @@ class Runner:
 
 DOCKER_EC2_BUILDERS = {
     Architecture.ARM64: EC2DistroImage(
-        image_id="ami-0951739b9be2881a1",
-        image_name="amazon-eks-arm64-node-1.17-v20210628",
+        image_id="ami-0e2b332e63c56bcb5",
+        image_name="Ubuntu Server 22.04 LTS (HVM), SSD Volume Type",
         #size_id="c7g.2xlarge",
         size_id="c7g.medium",
-        ssh_username="user"
+        ssh_username="ubuntu"
+    )
+}
+DOCKER_EC2_BUILDERS = {
+    Architecture.ARM64: EC2DistroImage(
+        image_id="ami-0574da719dca65348",
+        image_name="Ubuntu Server 22.04 LTS (HVM), SSD Volume Type",
+        size_id="c5.metal",
+        #size_id="c5.2xlarge",
+        #size_id="c7g.medium",
+        ssh_username="ubuntu"
     )
 }
 
+
+def run_docker_command(
+        command: List,
+        remote_docker_host: str = None,
+        return_output: bool = False
+
+):
+    env = os.environ.copy()
+
+    if remote_docker_host:
+        env["DOCKER_HOST"] = remote_docker_host
+
+    final_command = ["docker", *command]
+    if return_output:
+        return subprocess.check_output(
+            final_command,
+        )
+
+    subprocess.check_call(
+        final_command,
+        env=env
+    )
 
 
 def cleanup():
