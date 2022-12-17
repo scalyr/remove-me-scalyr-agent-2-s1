@@ -220,6 +220,7 @@ jobs:
     name: Build managed package ${{ matrix.name }}
     needs:
       - pre_job
+      - pre-build-cached-step
     runs-on: ${{ matrix.os }}
 
     strategy:
