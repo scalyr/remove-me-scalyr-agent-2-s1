@@ -1,6 +1,5 @@
 import dataclasses
 import os
-import pathlib as pl
 import logging
 import time
 import shlex
@@ -8,10 +7,6 @@ import random
 import json
 import datetime
 from typing import List, Dict
-
-import boto3
-import botocore.exceptions
-import paramiko
 
 logger = logging.getLogger(__name__)
 
@@ -226,6 +221,7 @@ def run_ssh_command_on_node(
         private_key_path: str,
         as_root: bool = False
 ):
+    import paramiko
 
     ssh = paramiko.SSHClient()
     ssh.load_system_host_keys()
@@ -385,7 +381,7 @@ def run_ec2_instance(
     add_current_ip_to_prefix_list(
         client=boto_client,
         prefix_list_id=security_groups_prefix_list_id,
-        workflow_id=unique_id,
+        ec2_objects_name_prefix="",
     )
 
     time.sleep(5)
@@ -694,6 +690,7 @@ def _parse_entry_timestamp(entry: Dict) -> float:
 
 
 def _remove_entries(client, entries: List, prefix_list_id: str):
+    import botocore.exceptions
     """
     Remove specified entries from prefix list.
     :param client: boto3 client.
