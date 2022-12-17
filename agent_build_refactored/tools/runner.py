@@ -1195,7 +1195,8 @@ class Runner:
                     ec2_image=ec2_image,
                     deployment_script_content=deployment_script_content,
                     file_mappings={
-                        str(public_key_path): f"/home/{ec2_image.ssh_username}/.ssh/authorized_keys"
+                        str(public_key_path): f"/home/{ec2_image.ssh_username}/.ssh/authorized_keys",
+                        str(SOURCE_ROOT / "agent_build_refactored/tools/build_in_ec2/create_cert.sh"): f"/tmp/create_cert.sh"
                     },
                 )
 

@@ -92,12 +92,7 @@ sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plu
 
 sudo usermod -aG docker $USER
 
-sudo mkdir -p /usr/lib/systemd/system/docker.service.d
-sudo cat <<EOT | sudo tee /usr/lib/systemd/system/docker.service.d/docker-host.conf
-[Service]
-ExecStart=
-ExecStart=/usr/bin/dockerd -H fd:// -H tcp://0.0.0.0:2375 --containerd=/run/containerd/containerd.sock $OPTIONS $DOCKER_STORAGE_OPTIONS $DOCKER_ADD_RUNTIMES
-EOT
+bash /tmp/create_cert.sh
 
-sudo systemctl daemon-reload
-sudo systemctl restart docker
+# ===================================================================
+
