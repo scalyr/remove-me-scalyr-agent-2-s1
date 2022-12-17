@@ -100,7 +100,7 @@ jobs:
         run: |
           echo "aws_private_key_name=scalyr_agent_github_actions_tests" >> $GITHUB_OUTPUT
           echo "aws_security_group=github-actions-remote-access" >> $GITHUB_OUTPUT
-          echo "aws_region="us-east-1" >> $GITHUB_OUTPUT
+          echo "aws_region=us-east-1" >> $GITHUB_OUTPUT
           echo "aws_object_name_prefix=${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}" >> $GITHUB_OUTPUT
 
   # This job pre-executes and caches Runner steps that has to be executed in a separate job.
