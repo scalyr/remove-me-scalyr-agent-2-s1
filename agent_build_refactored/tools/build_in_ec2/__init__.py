@@ -66,7 +66,7 @@ class AWSSettings:
             secret_key=_validate_setting("AWS_SECRET_KEY"),
             private_key_path=_validate_setting("AWS_PRIVATE_KEY_PATH"),
             private_key_name=_validate_setting("AWS_PRIVATE_KEY_NAME"),
-            public_key_path=_validate_setting("AWS_PUBLIC_KEY_PATH"),
+            #public_key_path=_validate_setting("AWS_PUBLIC_KEY_PATH"),
             region=_validate_setting("AWS_REGION"),
             security_group=_validate_setting("AWS_SECURITY_GROUP"),
             security_groups_prefix_list_id=_validate_setting("AWS_SECURITY_GROUPS_PREFIX_LIST_ID"),

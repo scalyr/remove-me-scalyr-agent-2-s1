@@ -1169,9 +1169,9 @@ class Runner:
                     aws_settings=aws_settings,
                     ec2_image=ec2_image,
                     deployment_script_content=deployment_script_content,
-                    file_mappings={
-                        str(public_key_path): f"/home/{ec2_image.ssh_username}/.ssh/authorized_keys"
-                    },
+                    # file_mappings={
+                    #     str(public_key_path): f"/home/{ec2_image.ssh_username}/.ssh/authorized_keys"
+                    # },
                 )
 
                 existing_ec2_builder_nodes[step.architecture] = node
