@@ -1215,6 +1215,12 @@ class Runner:
                 known_hosts_file_content = f"{known_hosts_file_content}\n{new_known_host}"
                 known_hosts_file.write_text(known_hosts_file_content)
 
+                print("1")
+                subprocess.check_call(
+                    ["ssh", "-l", "ubuntu", "--", str(node_ip)]
+                )
+                print("2")
+
             return f"ssh://{ec2_image.ssh_username}@{node.public_ips[0]}"
 
         for step in steps:
