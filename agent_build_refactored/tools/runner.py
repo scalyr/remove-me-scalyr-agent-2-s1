@@ -25,6 +25,7 @@ import logging
 import inspect
 import subprocess
 import sys
+import tempfile
 from typing import Union, Optional, List, Dict, Type, Callable
 
 
@@ -1174,27 +1175,37 @@ class Runner:
                 deployment_script_path = SOURCE_ROOT / "agent_build_refactored/tools/build_in_ec2/add_docker_host.sh"
                 deployment_script_content = deployment_script_path.read_text()
 
+                "ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub"
+
+                temp_dir = tempfile.TemporaryDirectory()
+                public_key_path = pl.Path(temp_dir.name) / "public_key.pub"
+
+
+                subprocess.check_call(
+                    ["ssh-keygen", "-y", str(aws_settings.private_key_path), "-f", str(public_key_path)]
+                )
+
                 #public_key_path = pl.Path(aws_settings.public_key_path)
 
                 node = create_ec2_instance_node(
                     aws_settings=aws_settings,
                     ec2_image=ec2_image,
                     deployment_script_content=deployment_script_content,
-                    # file_mappings={
-                    #     str(public_key_path): f"/home/{ec2_image.ssh_username}/.ssh/authorized_keys"
-                    # },
+                    file_mappings={
+                        str(public_key_path): f"/home/{ec2_image.ssh_username}/.ssh/authorized_keys"
+                    },
                 )
 
                 existing_ec2_builder_nodes[step.architecture] = node
 
                 node_ip = node.public_ips[0]
 
-                # subprocess.check_call(
-                #     ["ssh-add",
-                #      "-K",
-                #      str(aws_settings.private_key_path)
-                #      ]
-                # )
+                subprocess.check_call(
+                    ["ssh-add",
+                     "-K",
+                     str(aws_settings.private_key_path)
+                     ]
+                )
 
                 new_known_host = subprocess.check_output(
                     [
