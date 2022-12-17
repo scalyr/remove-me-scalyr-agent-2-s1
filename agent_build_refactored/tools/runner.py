@@ -1163,7 +1163,7 @@ class Runner:
                 deployment_script_path = SOURCE_ROOT / "agent_build_refactored/tools/build_in_ec2/add_docker_host.sh"
                 deployment_script_content = deployment_script_path.read_text()
 
-                public_key_path = pl.Path(aws_settings.public_key_path)
+                #public_key_path = pl.Path(aws_settings.public_key_path)
 
                 node = create_ec2_instance_node(
                     aws_settings=aws_settings,
