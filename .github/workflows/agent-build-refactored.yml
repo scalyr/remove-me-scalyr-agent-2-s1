@@ -155,7 +155,7 @@ jobs:
           echo "1"
           eval `ssh-agent -s`
           echo "2"
-          ssh-add -K /tmp/private_key.pem
+          cat "/tmp/private_key.pem" | ssh-add -
       
       
 
