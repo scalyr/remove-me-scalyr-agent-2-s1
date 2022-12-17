@@ -12,9 +12,7 @@ sudo apt-get install -y \
     ca-certificates \
     curl \
     gnupg \
-    lsb-release \
-    dialog \
-    apt-utils
+    lsb-release
 
 
 sudo mkdir -p /etc/apt/keyrings
