@@ -29,6 +29,10 @@ jobs:
       to_publish: ${{ steps.init-matrices.outputs.to_publish }}
       is_production: ${{ steps.init-matrices.outputs.is_production }}
       version: ${{ steps.init-matrices.outputs.version }}
+      aws_private_key_name: ${{ steps.init_common_options.aws_private_key_name }}
+      aws_security_group: ${{ steps.init_common_options.aws_security_group }}
+      aws_region: ${{ steps.init_common_options.aws_region }}
+      aws_object_name_prefix: ${{ steps.init_common_options.aws_object_name_prefix }}
       # The following outputs will be used by the other jobs below as their strategy matrices.
       pre_build_steps_matrix_json: ${{ steps.init-matrices.outputs.pre_build_steps_matrix_json }}
       agent_image_build_matrix_json: ${{ steps.init-matrices.outputs.agent_image_build_matrix_json }}
@@ -88,6 +92,16 @@ jobs:
               { "name": "rpm-x86_64", "distro-name": "centos6",       "remote-machine-type": "docker", "master_run_only": false },
               { "name": "rpm-x86_64", "distro-name": "amazonlinux2",  "remote-machine-type": "ec2",    "master_run_only": false }
             ]
+    
+
+
+      - name: Init common options
+        id: init_common_options
+        run: |
+          echo "aws_private_key_name=scalyr_agent_github_actions_tests" >> $GITHUB_OUTPUT
+          echo "aws_security_group=github-actions-remote-access" >> $GITHUB_OUTPUT
+          echo "aws_region="us-east-1" >> $GITHUB_OUTPUT
+          echo "aws_object_name_prefix=${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}" >> $GITHUB_OUTPUT
 
   # This job pre-executes and caches Runner steps that has to be executed in a separate job.
   # For example, we build platform-specific base docker images in a separate jobs to reduce overall build time, because
@@ -123,10 +137,23 @@ jobs:
           image: tonistiigi/binfmt:qemu-v6.2.0
           platforms: all
 
+      - name: Prepare AWS key
+        run: |
+          echo "${{ secrets.AWS_DEV_US_EAST_1_KEYPAIR_NAME }}" > /tmp/private_key.pem
+          chmod 600 /tmp/private_key.pem
+
       - name: Run cached step
         uses: ./.github/actions/execute-runner
         with:
           runner-fqdn: ${{ matrix.step-runner-fqdn }}
+          aws_access_key: ${{ secrets.SCALYR_CLOUDTECH_TESTING_DEV_AWS_ACCESS_KEY }}
+          aws_secret_key: ${{ secrets.SCALYR_CLOUDTECH_TESTING_DEV_AWS_ACCESS_SECRET }}
+          aws_private_key_path:  "/tmp/private_key.pem"
+          aws_private_key_name: ${{ needs.pre_job.outputs.aws_private_key_name }}
+          aws_region: ${{ needs.pre_job.outputs.aws_region }}
+          aws_security_group: ${{ needs.pre_job.outputs.aws_security_group }}
+          aws_security_groups_prefix_list_id: ${{ secrets.AWS_SECURITY_GROUPS_NAMED_PREFIX_ID }}
+          aws_object_name_prefix: ${{ needs.pre_job.outputs.aws_object_name_prefix }}
 
 
   build-images:

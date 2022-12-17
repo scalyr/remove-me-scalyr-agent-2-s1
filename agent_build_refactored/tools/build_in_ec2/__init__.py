@@ -42,8 +42,8 @@ class EC2DistroImage:
 
 @dataclasses.dataclass
 class AWSSettings:
-    aws_access_key: str
-    aws_secret_key: str
+    access_key: str
+    secret_key: str
     private_key_path: str
     private_key_name: str
     public_key_path: str
@@ -54,23 +54,28 @@ class AWSSettings:
 
     @staticmethod
     def create_from_env():
+        vars_name_prefix = os.environ.get("AWS_ENV_VARS_PREFIX", "")
+
         def _validate_setting(name):
-            value = os.environ.get(name)
+
+            final_name = f"{vars_name_prefix}{name}"
+            value = os.environ.get(final_name)
             if value is None:
-                raise Exception(f"Env. variable '{name}' is not found.")
+                raise Exception(f"Env. variable '{final_name}' is not found.")
 
             return value
 
+
         return AWSSettings(
-            aws_access_key=_validate_setting("AWS_ACCESS_KEY"),
-            aws_secret_key=_validate_setting("AWS_SECRET_KEY"),
-            private_key_path=_validate_setting("PRIVATE_KEY_PATH"),
-            private_key_name=_validate_setting("PRIVATE_KEY_NAME"),
-            public_key_path=_validate_setting("PUBLIC_KEY_PATH"),
-            region=_validate_setting("REGION"),
-            security_group=_validate_setting("SECURITY_GROUP"),
-            security_groups_prefix_list_id=_validate_setting("SECURITY_GROUPS_PREFIX_LIST_ID"),
-            ec2_objects_name_prefix=_validate_setting("EC2_OBJECTS_NAMES_PREFIX")
+            access_key=_validate_setting("AWS_ACCESS_KEY"),
+            secret_key=_validate_setting("AWS_SECRET_KEY"),
+            private_key_path=_validate_setting("AWS_PRIVATE_KEY_PATH"),
+            private_key_name=_validate_setting("AWS_PRIVATE_KEY_NAME"),
+            public_key_path=_validate_setting("AWS_PUBLIC_KEY_PATH"),
+            region=_validate_setting("AWS_REGION"),
+            security_group=_validate_setting("AWS_SECURITY_GROUP"),
+            security_groups_prefix_list_id=_validate_setting("AWS_SECURITY_GROUPS_PREFIX_LIST_ID"),
+            ec2_objects_name_prefix=_validate_setting("AWS_OBJECTS_NAMES_PREFIX")
         )
 
 
@@ -113,16 +118,16 @@ def create_ec2_instance_node(
     if boto3_client is None:
         boto3_client = boto3.client(
             "ec2",
-            aws_access_key_id=aws_settings.aws_access_key,
-            aws_secret_access_key=aws_settings.aws_secret_key,
+            aws_access_key_id=aws_settings.access_key,
+            aws_secret_access_key=aws_settings.secret_key,
             region_name=aws_settings.region,
         )
 
     if ec2_driver is None:
         driver_cls = get_driver(Provider.EC2)
         ec2_driver = driver_cls(
-            aws_settings.aws_access_key,
-            aws_settings.aws_secret_key,
+            aws_settings.access_key,
+            aws_settings.secret_key,
             region=aws_settings.region
         )
 

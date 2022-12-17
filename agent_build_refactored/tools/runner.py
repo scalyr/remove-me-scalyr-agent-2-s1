@@ -38,7 +38,7 @@ from agent_build_refactored.tools import (
     IN_DOCKER,
     IN_CICD,
 )
-from agent_build_refactored.tools.build_on_ec2 import run_ec2_instance, EC2DistroImage, create_ec2_instance_node, AWSSettings, run_ssh_command_on_node, create_volume
+from agent_build_refactored.tools.build_in_ec2 import run_ec2_instance, EC2DistroImage, create_ec2_instance_node, AWSSettings, run_ssh_command_on_node, create_volume
 
 logger = logging.getLogger(__name__)
 
@@ -1301,21 +1301,6 @@ class Runner:
         if args.run_all_cacheable_steps:
             steps = cls.get_all_cacheable_steps()
 
-            aws_settings = None
-            if args.prepare_ec2_builder_instance:
-                aws_settings = AWSSettings(
-                    aws_access_key=args.aws_access_key,
-                    aws_secret_key=args.aws_secret_key,
-                    private_key_path=args.aws_private_key_path,
-                    private_key_name=args.aws_private_key_name,
-                    public_key_path=args.aws_public_key_path,
-                    region=args.aws_region,
-                    security_group=args.aws_security_group,
-                    security_groups_prefix_list_id=args.aws_security_groups_prefix_list_id,
-                    ec2_objects_name_prefix=args.ec2_objects_name_prefix
-                )
-
-            #aws_settings=None
             cls._run_steps(
                 steps=steps,
                 work_dir=work_dir,
@@ -1335,16 +1320,16 @@ DOCKER_EC2_BUILDERS = {
         ssh_username="ubuntu"
     )
 }
-DOCKER_EC2_BUILDERS = {
-    Architecture.ARM64: EC2DistroImage(
-        image_id="ami-0574da719dca65348",
-        image_name="Ubuntu Server 22.04 LTS (HVM), SSD Volume Type",
-        size_id="c5.metal",
-        #size_id="c5.2xlarge",
-        #size_id="c7g.medium",
-        ssh_username="ubuntu"
-    )
-}
+# DOCKER_EC2_BUILDERS = {
+#     Architecture.ARM64: EC2DistroImage(
+#         image_id="ami-0574da719dca65348",
+#         image_name="Ubuntu Server 22.04 LTS (HVM), SSD Volume Type",
+#         size_id="c5.metal",
+#         #size_id="c5.2xlarge",
+#         #size_id="c7g.medium",
+#         ssh_username="ubuntu"
+#     )
+# }
 
 
 def run_docker_command(
