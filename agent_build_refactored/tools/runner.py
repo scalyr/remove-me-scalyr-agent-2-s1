@@ -1181,6 +1181,7 @@ class Runner:
                 public_key_path = pl.Path(temp_dir.name) / "public_key.pub"
 
                 print("0")
+
                 public_key = subprocess.check_output(
                     ["ssh-keygen", "-y", "-f", str(aws_settings.private_key_path)], env=os.environ.copy()
                 ).decode()
@@ -1202,6 +1203,8 @@ class Runner:
 
                 node_ip = node.public_ips[0]
 
+                import pprint
+                pprint.pprint(os.environ)
                 print("1")
                 subprocess.check_call(
                     ["ssh-add",
