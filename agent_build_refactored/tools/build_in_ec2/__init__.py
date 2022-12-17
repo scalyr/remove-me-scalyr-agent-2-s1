@@ -41,7 +41,7 @@ class AWSSettings:
     secret_key: str
     private_key_path: str
     private_key_name: str
-    public_key_path: str
+    #public_key_path: str
     region: str
     security_group: str
     security_groups_prefix_list_id: str
