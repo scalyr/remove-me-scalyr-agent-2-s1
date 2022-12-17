@@ -149,6 +149,7 @@ jobs:
           runner-fqdn: "agent_build_refactored.__init__.BuildTestEnvironment"
 
       - name: Prepare AWS key
+        id: prepare-ssh
         shell: bash
         run: |
           echo '${{ secrets.AWS_DEV_US_EAST_1_KEYPAIR_NAME }}' > /tmp/private_key.pem
@@ -157,11 +158,15 @@ jobs:
           echo 'eval `ssh-agent -s`' >> ~/.bash_profile
           
           cat "/tmp/private_key.pem" | ssh-add -
+          echo "ssh_auth_sock=${SSH_AUTH_SOCK}" >> $GITHUB_OUTPUT
+          cat $GITHUB_OUTPUT
       
       
 
       - name: Run cached step
         uses: ./.github/actions/execute-runner
+        env:
+          SSH_AUTH_SOCK: ${{ steps.prepare-ssh.outputs.ssh_auth_sock }}
         with:
           runner-fqdn: ${{ matrix.step-runner-fqdn }}
           aws_access_key: ${{ secrets.SCALYR_CLOUDTECH_TESTING_DEV_AWS_ACCESS_KEY }}
