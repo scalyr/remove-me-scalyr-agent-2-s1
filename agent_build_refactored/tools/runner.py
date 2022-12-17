@@ -1198,6 +1198,7 @@ class Runner:
                 ).decode()
 
                 known_hosts_file = pl.Path.home() / ".ssh/known_hosts"
+                known_hosts_file.parent.mkdir(parents=True, exist_ok=True)
                 known_hosts_file.write_text(
                     f"{new_known_host}\n{known_hosts_file.read_text()}"
                 )
