@@ -808,7 +808,7 @@ class EnvironmentRunnerStep(RunnerStep):
         )
 
         if self.runs_in_docker:
-            return True
+            return is_skipped
 
         return False
 
