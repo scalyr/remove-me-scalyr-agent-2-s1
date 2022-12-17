@@ -1182,7 +1182,7 @@ class Runner:
 
                 public_key = subprocess.check_output(
                     ["ssh-keygen", "-y", "-f", str(aws_settings.private_key_path)]
-                )
+                ).decode()
 
                 public_key_path.write_text(public_key)
 
