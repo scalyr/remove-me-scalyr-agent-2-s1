@@ -32,7 +32,7 @@ jobs:
       aws_private_key_name: ${{ steps.init_common_options.aws_private_key_name }}
       aws_security_group: ${{ steps.init_common_options.aws_security_group }}
       aws_region: ${{ steps.init_common_options.aws_region }}
-      aws_object_name_prefix: ${{ steps.init_common_options.aws_object_name_prefix }}
+      aws_objects_name_prefix: ${{ steps.init_common_options.aws_objects_name_prefix }}
       # The following outputs will be used by the other jobs below as their strategy matrices.
       pre_build_steps_matrix_json: ${{ steps.init-matrices.outputs.pre_build_steps_matrix_json }}
       agent_image_build_matrix_json: ${{ steps.init-matrices.outputs.agent_image_build_matrix_json }}
@@ -103,7 +103,9 @@ jobs:
           echo "aws_private_key_name=scalyr_agent_github_actions_tests" >> $GITHUB_OUTPUT
           echo "aws_security_group=github-actions-remote-access" >> $GITHUB_OUTPUT
           echo "aws_region=us-east-1" >> $GITHUB_OUTPUT
-          echo "aws_object_name_prefix=${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}" >> $GITHUB_OUTPUT
+          echo "aws_objects_name_prefix=${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}" >> $GITHUB_OUTPUT
+          
+          cat $GITHUB_OUTPUT
 
   # This job pre-executes and caches Runner steps that has to be executed in a separate job.
   # For example, we build platform-specific base docker images in a separate jobs to reduce overall build time, because
@@ -165,7 +167,7 @@ jobs:
           aws_region: ${{ needs.pre_job.outputs.aws_region }}
           aws_security_group: ${{ needs.pre_job.outputs.aws_security_group }}
           aws_security_groups_prefix_list_id: ${{ secrets.AWS_SECURITY_GROUPS_NAMED_PREFIX_ID }}
-          aws_objects_name_prefix: ${{ needs.pre_job.outputs.aws_object_name_prefix }}
+          aws_objects_name_prefix: ${{ needs.pre_job.outputs.aws_objects_name_prefix }}
 
 
   build-images:
