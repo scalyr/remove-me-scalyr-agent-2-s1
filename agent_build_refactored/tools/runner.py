@@ -1189,18 +1189,18 @@ class Runner:
 
                 node_ip = node.public_ips[0]
 
-                new_known_host = subprocess.check_output(
-                    [
-                        "ssh-keyscan",
-                        "-H",
-                        node_ip,
-                    ],
-                ).decode()
-
-                known_hosts_file = pl.Path.home() / ".ssh/known_hosts"
-                known_hosts_file.write_text(
-                    f"{new_known_host}\n{known_hosts_file.read_text()}"
-                )
+                # new_known_host = subprocess.check_output(
+                #     [
+                #         "ssh-keyscan",
+                #         "-H",
+                #         node_ip,
+                #     ],
+                # ).decode()
+                #
+                # known_hosts_file = pl.Path.home() / ".ssh/known_hosts"
+                # known_hosts_file.write_text(
+                #     f"{new_known_host}\n{known_hosts_file.read_text()}"
+                # )
 
             return f"ssh://{ec2_image.ssh_username}@{node.public_ips[0]}"
 
