@@ -1189,12 +1189,12 @@ class Runner:
 
                 node_ip = node.public_ips[0]
 
-                subprocess.check_call(
-                    ["ssh-add",
-                     "-K",
-                     str(aws_settings.private_key_path)
-                     ]
-                )
+                # subprocess.check_call(
+                #     ["ssh-add",
+                #      "-K",
+                #      str(aws_settings.private_key_path)
+                #      ]
+                # )
 
                 new_known_host = subprocess.check_output(
                     [
