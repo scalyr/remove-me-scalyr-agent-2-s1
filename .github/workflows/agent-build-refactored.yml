@@ -29,9 +29,9 @@ jobs:
       to_publish: ${{ steps.init-matrices.outputs.to_publish }}
       is_production: ${{ steps.init-matrices.outputs.is_production }}
       version: ${{ steps.init-matrices.outputs.version }}
-      aws_private_key_name: ${{ steps.init_common_options.aws_private_key_name }}
+      aws_private_key_name2: ${{ steps.init_common_options.aws_private_key_name }}
       aws_security_group: ${{ steps.init_common_options.aws_security_group }}
-      aws_region: "fwefewfwe"
+      aws_region2: ${{ steps.init_common_options.aws_region }}
       aws_objects_name_prefix: ${{ steps.init_common_options.aws_objects_name_prefix }}
       # The following outputs will be used by the other jobs below as their strategy matrices.
       pre_build_steps_matrix_json: ${{ steps.init-matrices.outputs.pre_build_steps_matrix_json }}
