@@ -1237,8 +1237,19 @@ class RpmManagedPackagesBuilderx86_64(ManagedPackagesBuilder):
     PACKAGECLOUD_DISTRO_VERSION = "rpm_any"
 
 
+class RpmManagedPackagesBuilderAarch64(ManagedPackagesBuilder):
+    BASE_ENVIRONMENT = PREPARE_TOOLSET_GLIBC_ARM64
+    DEPENDENCY_PACKAGES_ARCHITECTURE = Architecture.ARM64
+    PACKAGE_TYPE = "rpm"
+    PYTHON_BUILD_STEP = BUILD_PYTHON_GLIBC_ARM64
+    AGENT_LIBS_BUILD_STEP = BUILD_AGENT_LIBS_GLIBC_ARM64
+    PACKAGECLOUD_DISTRO = "rpm_any"
+    PACKAGECLOUD_DISTRO_VERSION = "rpm_any"
+
+
 ALL_MANAGED_PACKAGE_BUILDERS: Dict[str, Type[ManagedPackagesBuilder]] = {
     "deb-amd64": DebManagedPackagesBuilderX86_64,
     "deb-arm64": DebManagedPackagesBuilderARM64,
-    "rpm-x86_64": RpmManagedPackagesBuilderx86_64
+    "rpm-x86_64": RpmManagedPackagesBuilderx86_64,
+    "rpm-aarch64": RpmManagedPackagesBuilderAarch64
 }
