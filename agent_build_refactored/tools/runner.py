@@ -1217,7 +1217,7 @@ class Runner:
 
                 print("1")
                 subprocess.check_call(
-                    ["ssh", "-l", "ubuntu", "--", str(node_ip)]
+                    ["ssh", "o", "StrictHostKeyChecking=no", "-l", "ubuntu", "--", str(node_ip)]
                 )
                 print("2")
 
