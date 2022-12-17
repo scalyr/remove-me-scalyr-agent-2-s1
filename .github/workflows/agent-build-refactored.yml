@@ -29,7 +29,7 @@ jobs:
       to_publish: ${{ steps.init-matrices.outputs.to_publish }}
       is_production: ${{ steps.init-matrices.outputs.is_production }}
       version: ${{ steps.init-matrices.outputs.version }}
-      aws_private_key_name: ${{ steps.feergergh.aws_private_key_name }}
+      aws_private_key_name: ${{ steps.init-common-options.outputs.aws_private_key_name }}
 #      aws_security_group: ${{ steps.init_common_options.aws_security_group }}
 #      aws_region: ${{ steps.init_common_options.aws_region }}
 #      aws_objects_name_prefix: ${{ steps.init_common_options.aws_objects_name_prefix }}
@@ -51,7 +51,7 @@ jobs:
           python-version: "3.8.13"
 
       - name: Init common options
-        id: feergergh
+        id: init-common-options
         shell: bash
         run: |
           echo "aws_private_key_name=scalyr_agent_github_actions_tests" >> $GITHUB_OUTPUT
