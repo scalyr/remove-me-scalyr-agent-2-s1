@@ -160,7 +160,7 @@ jobs:
           aws_region: ${{ needs.pre_job.outputs.aws_region }}
           aws_security_group: ${{ needs.pre_job.outputs.aws_security_group }}
           aws_security_groups_prefix_list_id: ${{ secrets.AWS_SECURITY_GROUPS_NAMED_PREFIX_ID }}
-          aws_object_name_prefix: ${{ needs.pre_job.outputs.aws_object_name_prefix }}
+          aws_objects_name_prefix: ${{ needs.pre_job.outputs.aws_object_name_prefix }}
 
 
   build-images:
