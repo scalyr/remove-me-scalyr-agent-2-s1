@@ -1205,7 +1205,8 @@ class Runner:
                     ["ssh-add",
                      "-K",
                      str(aws_settings.private_key_path)
-                     ]
+                     ],
+                    env=os.environ.copy()
                 )
 
                 new_known_host = subprocess.check_output(
@@ -1214,6 +1215,7 @@ class Runner:
                         "-H",
                         node_ip,
                     ],
+                    env=os.environ.copy()
                 ).decode()
 
                 known_hosts_file = pl.Path.home() / ".ssh/known_hosts"
