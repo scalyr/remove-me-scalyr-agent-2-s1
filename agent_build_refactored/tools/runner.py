@@ -1181,7 +1181,7 @@ class Runner:
                 public_key_path = pl.Path(temp_dir.name) / "public_key.pub"
 
                 public_key = subprocess.check_output(
-                    ["ssh-keygen", "-y", "-f", str(aws_settings.private_key_path)]
+                    ["ssh-keygen", "-y", "-f", str(aws_settings.private_key_path)], env=os.environ.copy()
                 ).decode()
 
                 public_key_path.write_text(public_key)
