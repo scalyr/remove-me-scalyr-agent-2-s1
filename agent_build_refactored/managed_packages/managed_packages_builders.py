@@ -1072,7 +1072,7 @@ def create_build_agent_libs_step(
     """
 
     return ArtifactRunnerStep(
-        name="build_agent_libs",
+        name=f"build_agent_libs_{base_step.architecture.value}",
         script_path="agent_build_refactored/managed_packages/steps/build_agent_libs.sh",
         tracked_files_globs=[
             "agent_build/requirement-files/*.txt",
