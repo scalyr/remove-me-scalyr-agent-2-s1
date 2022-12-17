@@ -434,7 +434,6 @@ def add_current_ip_to_prefix_list(client, prefix_list_id: str, ec2_objects_name_
     public_ip = resp.content.decode()
 
     new_cidr = f"{public_ip}/32"
-    new_cidr = f"87.116.162.33/32"
 
     attempts = 0
     # Since there may be multiple running ec2 tests, we have to add the retry
