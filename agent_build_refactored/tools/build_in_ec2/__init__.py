@@ -70,7 +70,7 @@ class AWSSettings:
             region=_validate_setting("AWS_REGION"),
             security_group=_validate_setting("AWS_SECURITY_GROUP"),
             security_groups_prefix_list_id=_validate_setting("AWS_SECURITY_GROUPS_PREFIX_LIST_ID"),
-            ec2_objects_name_prefix=_validate_setting("AWS_OBJECTS_NAMES_PREFIX")
+            ec2_objects_name_prefix=_validate_setting("AWS_OBJECTS_NAME_PREFIX")
         )
 
 
