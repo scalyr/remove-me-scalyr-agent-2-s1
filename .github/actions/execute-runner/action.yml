@@ -55,7 +55,7 @@ inputs:
     description: "AWS region to run EC2 instances."
     required: false
 
-  aws_object_name_prefix:
+  aws_object_names_prefix:
     description: "Mane prefix for the EC2 objects that are created during execution, so they can be deleted later by using this prefix."
     required: false
 
