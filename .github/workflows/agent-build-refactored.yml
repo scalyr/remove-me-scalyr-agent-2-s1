@@ -33,7 +33,7 @@ jobs:
       aws_security_group: ${{ steps.init_common_options.outputs.aws_security_group }}
       aws_region: ${{ steps.init_common_options.outputs.aws_region }}
       aws_objects_name_prefix: ${{ steps.init_common_options.outputs.aws_objects_name_prefix }}
-       The following outputs will be used by the other jobs below as their strategy matrices.
+      # The following outputs will be used by the other jobs below as their strategy matrices.
       pre_build_steps_matrix_json: ${{ steps.init-matrices.outputs.pre_build_steps_matrix_json }}
       agent_image_build_matrix_json: ${{ steps.init-matrices.outputs.agent_image_build_matrix_json }}
       managed_packages_build_matrix_json: ${{ steps.init-matrices.outputs.managed_packages_build_matrix_json }}
