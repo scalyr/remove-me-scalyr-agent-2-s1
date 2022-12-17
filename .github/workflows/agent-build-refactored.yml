@@ -52,6 +52,7 @@ jobs:
 
       - name: Init common options
         id: init_common_options
+        shell: bash
         run: |
           echo "aws_private_key_name=scalyr_agent_github_actions_tests" >> $GITHUB_OUTPUT
           echo "aws_security_group=github-actions-remote-access" >> $GITHUB_OUTPUT
