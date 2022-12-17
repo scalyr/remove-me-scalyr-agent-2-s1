@@ -1201,6 +1201,7 @@ class Runner:
 
                 node_ip = node.public_ips[0]
 
+                print("1")
                 subprocess.check_call(
                     ["ssh-add",
                      "-K",
@@ -1209,6 +1210,7 @@ class Runner:
                     env=os.environ.copy()
                 )
 
+                print("2")
                 new_known_host = subprocess.check_output(
                     [
                         "ssh-keyscan",
@@ -1217,6 +1219,8 @@ class Runner:
                     ],
                     env=os.environ.copy()
                 ).decode()
+
+                print("3")
 
                 known_hosts_file = pl.Path.home() / ".ssh/known_hosts"
                 known_hosts_file.parent.mkdir(parents=True, exist_ok=True)
