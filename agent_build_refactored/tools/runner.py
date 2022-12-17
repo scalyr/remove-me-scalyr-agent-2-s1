@@ -801,6 +801,17 @@ class EnvironmentRunnerStep(RunnerStep):
         If step does not run in docker, then its actions are executed directly on current system.
     """
 
+    def _restore_cache(self, output_directory: pl.Path, cache_directory: pl.Path) -> bool:
+        is_skipped = super(EnvironmentRunnerStep, self)._restore_cache(
+            output_directory=output_directory,
+            cache_directory=cache_directory
+        )
+
+        if self.runs_in_docker:
+            return False
+
+        return is_skipped
+
     # def _restore_cache(self, output_directory: pl.Path, cache_directory: pl.Path) -> bool:
     #     if not self.runs_in_docker:
     #         return False
