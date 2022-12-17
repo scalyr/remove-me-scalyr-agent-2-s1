@@ -1209,7 +1209,6 @@ class Runner:
                 print("1")
                 subprocess.check_call(
                     ["ssh-add",
-                     "-K",
                      str(aws_settings.private_key_path)
                      ],
                     env=os.environ.copy()
