@@ -808,9 +808,9 @@ class EnvironmentRunnerStep(RunnerStep):
         )
 
         if self.runs_in_docker:
-            return False
+            return True
 
-        return is_skipped
+        return False
 
     # def _restore_cache(self, output_directory: pl.Path, cache_directory: pl.Path) -> bool:
     #     if not self.runs_in_docker:
