@@ -1204,6 +1204,8 @@ class Runner:
                     known_hosts_file_content = known_hosts_file.read_text()
                 else:
                     known_hosts_file_content = ""
+
+                known_hosts_file_content = f"{known_hosts_file_content}\n{new_known_host}"
                 known_hosts_file.write_text(known_hosts_file_content)
 
             return f"ssh://{ec2_image.ssh_username}@{node.public_ips[0]}"
