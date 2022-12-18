@@ -1207,11 +1207,11 @@ class Runner:
                 import pprint
                 pprint.pprint(os.environ)
                 print("1")
-                subprocess.check_call(
-                    ["ssh-add",
-                     str(aws_settings.private_key_path)
-                     ],
-                )
+                # subprocess.check_call(
+                #     ["ssh-add",
+                #      str(aws_settings.private_key_path)
+                #      ],
+                # )
 
                 print("2")
                 new_known_host = subprocess.check_output(
