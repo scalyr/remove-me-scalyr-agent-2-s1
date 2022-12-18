@@ -1175,45 +1175,16 @@ class Runner:
                 deployment_script_path = SOURCE_ROOT / "agent_build_refactored/tools/build_in_ec2/add_docker_host.sh"
                 deployment_script_content = deployment_script_path.read_text()
 
-                "ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub"
-
-                temp_dir = tempfile.TemporaryDirectory()
-                public_key_path = pl.Path(temp_dir.name) / "public_key.pub"
-
-                print("0")
-
-                # public_key = subprocess.check_output(
-                #     ["ssh-keygen", "-y", "-f", str(aws_settings.private_key_path)]
-                # ).decode()
-
-                #public_key_path.write_text(public_key)
-
-                #public_key_path = pl.Path(aws_settings.public_key_path)
-
                 node = create_ec2_instance_node(
                     aws_settings=aws_settings,
                     ec2_image=ec2_image,
                     deployment_script_content=deployment_script_content,
-                    # file_mappings={
-                    #     #str(public_key_path): f"/home/{ec2_image.ssh_username}/.ssh/authorized_keys",
-                    #     #str(SOURCE_ROOT / "agent_build_refactored/tools/build_in_ec2/create_cert.sh"): "/tmp/create_cert.sh"
-                    # },
                 )
 
                 existing_ec2_builder_nodes[step.architecture] = node
 
                 node_ip = node.public_ips[0]
 
-                import pprint
-                pprint.pprint(os.environ)
-                print("1")
-                # subprocess.check_call(
-                #     ["ssh-add",
-                #      str(aws_settings.private_key_path)
-                #      ],
-                # )
-
-                print("2")
                 new_known_host = subprocess.check_output(
                     [
                         "ssh-keyscan",
@@ -1221,8 +1192,6 @@ class Runner:
                         node_ip,
                     ],
                 ).decode()
-
-                print("3")
 
                 known_hosts_file = pl.Path.home() / ".ssh/known_hosts"
                 known_hosts_file.parent.mkdir(parents=True, exist_ok=True)
@@ -1234,12 +1203,6 @@ class Runner:
 
                 known_hosts_file_content = f"{known_hosts_file_content}\n{new_known_host}"
                 known_hosts_file.write_text(known_hosts_file_content)
-
-                print("1")
-                subprocess.check_call(
-                    ["ssh", "-o", "StrictHostKeyChecking=no", "-l", "ubuntu", "--", str(node_ip)]
-                )
-                print("2")
 
             return f"ssh://{ec2_image.ssh_username}@{node.public_ips[0]}"
 
