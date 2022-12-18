@@ -212,8 +212,8 @@ def create_ec2_instance_node(
                 f"STDOUT: {script_deployment.stdout}\n"
                 f"STDERR: {script_deployment.stderr}\n"
             )
-        if script_deployment.exit_status != 0:
-            logger.error(f"Error: {script_deployment.exit_status}")
+            if script_deployment.exit_status != 0:
+                raise Exception(f"Deployment script has failed with exit code: {script_deployment.exit_status}")
 
 
 def run_ssh_command_on_node(
