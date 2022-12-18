@@ -5,11 +5,11 @@ set -e
 chmod 700 ~/.ssh/
 chmod 600 ~/.ssh/authorized_keys
 
-export DEBIAN_FRONTEND="noninteractive"
 ls /var/lib/apt/lists/
 sudo rm -r /var/lib/apt/lists/*
 sudo apt-get update
 
+export DEBIAN_FRONTEND="noninteractive"
 sudo apt-get install -y \
     ca-certificates \
     curl \
