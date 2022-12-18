@@ -497,36 +497,53 @@ class RunnerStep:
             output_directory=in_docker_output_directory
         )
 
-        if remote_docker_host is None:
+        self._run_script_in_remote_docker(
+            command=command_args,
+            isolated_source_root_path=in_docker_isolated_source_root,
+            env_options=env_options,
+            input_copies={
+                f"{isolated_source_root}/.": in_docker_isolated_source_root,
+                **{f"{src}/.": dst for src, dst in required_step_mounts.items()},
+                f"{output_directory}/.": in_docker_output_directory,
+                f"{cache_directory}/.": in_docker_cache_directory
+            },
+            output_copies={
+                f"{in_docker_output_directory}/.": output_directory,
+                f"{in_docker_cache_directory}/.": cache_directory
+            },
+            remote_docker_host=remote_docker_host
+        )
 
-            self._run_script_in_local_docker(
-                command=command_args,
-                isolated_source_root_path=in_docker_isolated_source_root,
-                env_options=env_options,
-                mounts={
-                isolated_source_root: in_docker_isolated_source_root,
-                cache_directory: in_docker_cache_directory,
-                output_directory: in_docker_output_directory,
-                **required_step_mounts
-            }
-            )
-        else:
-            self._run_script_in_remote_docker(
-                command=command_args,
-                isolated_source_root_path=in_docker_isolated_source_root,
-                env_options=env_options,
-                input_copies={
-                    f"{isolated_source_root}/.": in_docker_isolated_source_root,
-                    **{f"{src}/.": dst for src, dst in required_step_mounts.items()},
-                    f"{output_directory}/.": in_docker_output_directory,
-                    f"{cache_directory}/.": in_docker_cache_directory
-                },
-                output_copies={
-                    f"{in_docker_output_directory}/.": output_directory,
-                    f"{in_docker_cache_directory}/.": cache_directory
-                },
-                remote_docker_host=remote_docker_host
-            )
+        # if remote_docker_host is None:
+        #
+        #     self._run_script_in_local_docker(
+        #         command=command_args,
+        #         isolated_source_root_path=in_docker_isolated_source_root,
+        #         env_options=env_options,
+        #         mounts={
+        #             isolated_source_root: in_docker_isolated_source_root,
+        #             cache_directory: in_docker_cache_directory,
+        #             output_directory: in_docker_output_directory,
+        #             **required_step_mounts
+        #         }
+        #     )
+        # else:
+        #     self._run_script_in_remote_docker(
+        #         command=command_args,
+        #         isolated_source_root_path=in_docker_isolated_source_root,
+        #         env_options=env_options,
+        #         input_copies={
+        #             f"{isolated_source_root}/.": in_docker_isolated_source_root,
+        #             **{f"{src}/.": dst for src, dst in required_step_mounts.items()},
+        #             f"{output_directory}/.": in_docker_output_directory,
+        #             f"{cache_directory}/.": in_docker_cache_directory
+        #         },
+        #         output_copies={
+        #             f"{in_docker_output_directory}/.": output_directory,
+        #             f"{in_docker_cache_directory}/.": cache_directory
+        #         },
+        #         remote_docker_host=remote_docker_host
+        #     )
 
     def _prepare_base_image(self, work_dir: pl.Path, remote_docker_host: str = None):
 
@@ -1094,8 +1111,6 @@ class Runner:
             ["image", "ls"]
         )
 
-        a=10
-
         run_docker_command([
             "run",
             "-i",
@@ -1142,7 +1157,6 @@ class Runner:
             steps=steps_to_run,
             work_dir=self.work_dir,
         )
-
 
     def _run(self):
         """
