@@ -104,3 +104,5 @@ EOT
 
 sudo systemctl daemon-reload
 sudo systemctl restart docker
+
+echo "ClientAliveInterval 60" >> /etc/ssh/sshd_config
