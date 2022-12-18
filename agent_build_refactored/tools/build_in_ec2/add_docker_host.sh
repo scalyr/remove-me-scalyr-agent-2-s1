@@ -7,7 +7,7 @@ export DEBIAN_FRONTEND="noninteractive"
 chmod 700 ~/.ssh/
 chmod 600 ~/.ssh/authorized_keys
 
-sudo apt-get update
+sudo rm -r /var/lib/apt/lists/* && sudo apt-get update
 sudo apt-get install -y \
     ca-certificates \
     curl \
