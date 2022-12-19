@@ -286,6 +286,8 @@ jobs:
 
       - name: Prepare everything that is needed by builder '${{ matrix.name }}'
         uses: ./.github/actions/execute-runner
+        env:
+          SSH_AUTH_SOCK: ${{ steps.prepare-ssh.outputs.ssh_auth_sock }}
         with:
           runner-fqdn: ${{ matrix.builder-fqdn }}
           aws_access_key: ${{ secrets.SCALYR_CLOUDTECH_TESTING_DEV_AWS_ACCESS_KEY }}
@@ -403,6 +405,7 @@ jobs:
       # to reuse them instead of building if they are not changed.
       - name: Build managed package with builder '${{ matrix.name }}'
         env:
+          SSH_AUTH_SOCK: ${{ steps.prepare-ssh.outputs.ssh_auth_sock }}
           AWS_ACCESS_KEY: ${{ secrets.SCALYR_CLOUDTECH_TESTING_DEV_AWS_ACCESS_KEY }}
           AWS_SECRET_KEY: ${{ secrets.SCALYR_CLOUDTECH_TESTING_DEV_AWS_ACCESS_SECRET }}
           AWS_PRIVATE_KEY_NAME: ${{ needs.pre_job.outputs.aws_private_key_name }}
@@ -414,9 +417,6 @@ jobs:
         run: |
             echo "Changing build version to ${{ needs.pre_job.outputs.version }}"
             echo "${{ needs.pre_job.outputs.version }}" > VERSION
-          
-            echo "@@@@"
-            echo "${AWS_REGION}"
           
             echo "${{ steps.download_python.outputs.last_repo_python_package_path }}"
             echo "${{ steps.download_agent_libs.outputs.last_repo_agent_libs_package_path }}"
