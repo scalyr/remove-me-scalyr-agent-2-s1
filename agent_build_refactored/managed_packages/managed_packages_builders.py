@@ -1167,7 +1167,7 @@ def create_prepare_toolset_step(
     """
 
     return EnvironmentRunnerStep(
-        name="prepare_toolset",
+        name=f"prepare_toolset_{architecture.value}",
         script_path="agent_build_refactored/managed_packages/steps/prepare_toolset.sh",
         base=DockerImageSpec(
             name="ubuntu:22.04",
