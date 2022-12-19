@@ -148,7 +148,7 @@ jobs:
         with:
           runner-fqdn: "agent_build_refactored.__init__.BuildTestEnvironment"
 
-      - name: Prepare AWS key
+      - name: Prepare SSH
         id: prepare-ssh
         shell: bash
         run: |
@@ -158,9 +158,6 @@ jobs:
           
           cat "/tmp/private_key.pem" | ssh-add -
           echo "ssh_auth_sock=${SSH_AUTH_SOCK}" >> $GITHUB_OUTPUT
-          cat $GITHUB_OUTPUT
-      
-      
 
       - name: Run cached step
         uses: ./.github/actions/execute-runner
@@ -275,11 +272,30 @@ jobs:
         with:
           runner-fqdn: "agent_build_refactored.__init__.BuildTestEnvironment"
 
+      - name: Prepare SSH
+        id: prepare-ssh
+        shell: bash
+        run: |
+          echo '${{ secrets.AWS_DEV_US_EAST_1_KEYPAIR_NAME }}' > /tmp/private_key.pem
+          chmod 600 /tmp/private_key.pem
+          eval `ssh-agent -s`
+
+          cat "/tmp/private_key.pem" | ssh-add -
+          echo "ssh_auth_sock=${SSH_AUTH_SOCK}" >> $GITHUB_OUTPUT
+
 
       - name: Prepare everything that is needed by builder '${{ matrix.name }}'
         uses: ./.github/actions/execute-runner
         with:
           runner-fqdn: ${{ matrix.builder-fqdn }}
+          aws_access_key: ${{ secrets.SCALYR_CLOUDTECH_TESTING_DEV_AWS_ACCESS_KEY }}
+          aws_secret_key: ${{ secrets.SCALYR_CLOUDTECH_TESTING_DEV_AWS_ACCESS_SECRET }}
+          aws_private_key_path: "/tmp/private_key.pem"
+          aws_private_key_name: ${{ needs.pre_job.outputs.aws_private_key_name }}
+          aws_region: ${{ needs.pre_job.outputs.aws_region }}
+          aws_security_group: ${{ needs.pre_job.outputs.aws_security_group }}
+          aws_security_groups_prefix_list_id: ${{ secrets.AWS_SECURITY_GROUPS_NAMED_PREFIX_ID }}
+          aws_objects_name_prefix: ${{ needs.pre_job.outputs.aws_objects_name_prefix }}
 
       # Before we build needed packages, we check if the target repo already contains dependency
       # 'scalyr-agent-python3' and 'scalyr-agent-libs' packages. If there are such packages, then we reuse them
