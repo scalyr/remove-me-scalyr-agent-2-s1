@@ -386,8 +386,16 @@ jobs:
       # Finally build the packages. We also specify already pre-downloaded dependency 'python' and 'agent-libs' packages
       # to reuse them instead of building if they are not changed.
       - name: Build managed package with builder '${{ matrix.name }}'
+        env:
+          AWS_ACCESS_KEY: ${{ secrets.SCALYR_CLOUDTECH_TESTING_DEV_AWS_ACCESS_KEY }}
+          AWS_SECRET_KEY: ${{ secrets.SCALYR_CLOUDTECH_TESTING_DEV_AWS_ACCESS_SECRET }}
+          AWS_PRIVATE_KEY_NAME: ${{ needs.pre_job.outputs.aws_private_key_name }}
+          AWS_PRIVATE_KEY_PATH: "/tmp/private_key.pem"
+          AWS_REGION: ${{ needs.pre_job.outputs.aws_region }}
+          AWS_SECURITY_GROUP: ${{ needs.pre_job.outputs.aws_security_group }}
+          AWS_SECURITY_GROUPS_PREFIX_LIST_ID: ${{ secrets.AWS_SECURITY_GROUPS_NAMED_PREFIX_ID }}
+          AWS_OBJECTS_NAME_PREFIX: ${{ needs.pre_job.outputs.aws_objects_name_prefix }}
         run: |
-            
             echo "Changing build version to ${{ needs.pre_job.outputs.version }}"
             echo "${{ needs.pre_job.outputs.version }}" > VERSION
           
