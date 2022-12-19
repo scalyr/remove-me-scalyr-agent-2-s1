@@ -1089,7 +1089,6 @@ def create_build_agent_libs_step(
         },
         github_actions_settings=GitHubActionsSettings(
             cacheable=True,
-            pre_build_in_separate_job=True,
             run_in_remote_docker=run_in_remote_docker
         )
     )
@@ -1188,6 +1187,7 @@ def create_prepare_toolset_step(
         },
         github_actions_settings=GitHubActionsSettings(
             cacheable=True,
+            pre_build_in_separate_job=True,
             run_in_remote_docker=run_in_remote_docker
         )
 )
