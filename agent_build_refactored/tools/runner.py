@@ -1107,10 +1107,6 @@ class Runner:
             ["load", "-i", str(base_image_path)]
         )
 
-        run_docker_command(
-            ["image", "ls"]
-        )
-
         run_docker_command([
             "run",
             "-i",
@@ -1119,8 +1115,7 @@ class Runner:
             f"{SOURCE_ROOT}:/tmp/source",
             *env_args,
             "--platform",
-            "linux/arm64",
-            #str(self.base_docker_image.platform),
+            str(self.base_docker_image.platform),
             self.base_docker_image.name,
             python_executable,
             "/tmp/source/agent_build_refactored/scripts/runner_helper.py",
