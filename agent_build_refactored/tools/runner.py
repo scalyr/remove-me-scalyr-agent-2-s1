@@ -248,6 +248,7 @@ class RunnerStep:
         result = f"{self.name}"
         if self.runs_in_docker:
             image_name = self.initial_docker_image.name.replace(":", "-")
+            image_name = image_name.replace(".", "-")
             image_platform = self.initial_docker_image.platform.to_dashed_str
             result = f"{result}-{image_name}-{image_platform}"
         result = f"{result}-{self.checksum}"
