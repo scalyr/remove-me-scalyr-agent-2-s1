@@ -5,10 +5,24 @@ set -e
 chmod 700 ~/.ssh/
 chmod 600 ~/.ssh/authorized_keys
 
-sudo apt-get clean
-#ls /var/lib/apt/lists/
-#sudo rm -r /var/lib/apt/lists/*
-sudo apt-get update
+ATTEMPTS=5
+while True
+do
+  sudo apt-get clean
+  UPDATE_OUTPUT=$(sudo apt-get update || true)
+  EXIT_CODE="$?"
+  if [ "${EXIT_CODE}" -ne 0 ]; then
+    if [ "$ATTEMPTS" -eq 0 ]; then
+      >&2 echo "Can not update apt sources."
+      >&2 echo "${UPDATE_OUTPUT}"
+      exit ${EXIT_CODE}
+    fi
+    ATTEMPTS=$((ATTEMPTS-1))
+    sleep 5
+  else
+    break
+  fi
+done
 
 export DEBIAN_FRONTEND="noninteractive"
 sudo apt-get install -y \
