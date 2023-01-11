@@ -1117,7 +1117,8 @@ def create_build_openssl_steps(
                 "OPENSSL_VERSION": openssl_version,
             },
             github_actions_settings=GitHubActionsSettings(
-                run_in_remote_docker=run_in_remote_docker
+                run_in_remote_docker=run_in_remote_docker,
+                cacheable=True
             )
         )
         steps[architecture] = step
@@ -1173,7 +1174,8 @@ def create_build_python_dependencies_steps(
                 **_PYTHON_BUILD_DEPENDENCIES_VERSIONS,
             },
             github_actions_settings=GitHubActionsSettings(
-                run_in_remote_docker=run_in_remote_docker
+                run_in_remote_docker=run_in_remote_docker,
+                cacheable=True
             )
         )
         steps[architecture] = step
@@ -1212,7 +1214,8 @@ def create_build_python_steps(
 
             },
             github_actions_settings=GitHubActionsSettings(
-                run_in_remote_docker=run_in_remote_docker
+                run_in_remote_docker=run_in_remote_docker,
+                cacheable=True
             )
         )
 
@@ -1274,15 +1277,15 @@ def create_build_python_package_root_steps() -> Dict[Architecture, ArtifactRunne
                 "BUILD_OPENSSL_3": BUILD_OPENSSL_STEPS[OPENSSL_VERSION_TYPE_3][architecture],
                 "BUILD_PYTHON_WITH_OPENSSL_1_1_1": BUILD_PYTHON_STEPS[OPENSSL_VERSION_TYPE_1_1_1][architecture],
                 "BUILD_PYTHON_WITH_OPENSSL_3": BUILD_PYTHON_STEPS[OPENSSL_VERSION_TYPE_3][architecture],
-
-
             },
             environment_variables={
                 "PYTHON_SHORT_VERSION": EMBEDDED_PYTHON_SHORT_VERSION,
                 "INSTALL_PREFIX": "/opt/scalyr-agent-2-dependencies",
                 "LIBSSL_DIR": libssl_dir
             },
-
+            github_actions_settings=GitHubActionsSettings(
+                cacheable=True
+            )
         )
 
         steps[architecture] = step
