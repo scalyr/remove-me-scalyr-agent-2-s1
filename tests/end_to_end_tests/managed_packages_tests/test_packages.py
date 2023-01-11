@@ -167,6 +167,7 @@ def test_packages(
             logger.error(f"Install log:\n{install_log_path.read_text()}\n")
 
         logger.exception("Install script has failed.")
+        subprocess.check_call("dmesg")
         raise
 
     logger.info(
