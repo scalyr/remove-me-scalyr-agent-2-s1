@@ -74,11 +74,16 @@ function copy_and_patch_openssl_libs() {
   local hashlib_binding_path="$(get_standard_c_binding_path "${python_step_bindings_dir}" _hashlib.cpython-*-*-*-*.so)"
 
   local bindings_dir="${dst_dir}/bindings"
+
+  # Copy original ssl and hashlib C bindings. They will be used in case if appropriate OpenSSL version is
+  # found on system.
   local original_bindings_dir="${bindings_dir}/original"
   mkdir -p "${original_bindings_dir}"
   cp "${ssl_binding_path}" "${original_bindings_dir}"
   cp "${hashlib_binding_path}" "${original_bindings_dir}"
 
+  # In case if there is no appropriate system OpenSSL, we also copy the same C bindings, but which are hardcoded
+  # to use OpenSSL shared objects that are shipped with the package.
   local patched_bindings_dir="${bindings_dir}/patched"
   mkdir -p "${patched_bindings_dir}"
   local patched_ssl_binding_path="${patched_bindings_dir}/$(basename "${ssl_binding_path}")"
@@ -87,6 +92,7 @@ function copy_and_patch_openssl_libs() {
   cp "${hashlib_binding_path}" "${patched_bindings_dir}"
 
   new_dependencies_dir="$(realpath --relative-to "${PACKAGE_ROOT}" "${dst_dir}")"
+  # Patch ssl and hashlib C bindings and hardcode package's shared objects as dependencies.
   patchelf --replace-needed "${libssl_filename}" "/${new_dependencies_dir}/${libssl_filename}" "${patched_ssl_binding_path}"
   patchelf --replace-needed "${libcrypto_filename}" "/${new_dependencies_dir}/${libcrypto_filename}" "${patched_ssl_binding_path}"
   patchelf --replace-needed "${libcrypto_filename}" "/${new_dependencies_dir}/${libcrypto_filename}" "${patched_hashlib_binding_path}"

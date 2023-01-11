@@ -35,7 +35,6 @@ make DESTDIR="${STEP_OUTPUT_PATH}" install_sw
 popd
 popd
 
-
 mkdir -p "${STEP_OUTPUT_PATH}/etc/ld.so.conf.d"
 echo "/usr/local/lib" >> "${STEP_OUTPUT_PATH}/etc/ld.so.conf.d/local.conf"
 echo "/usr/local/lib64" >> "${STEP_OUTPUT_PATH}/etc/ld.so.conf.d/local.conf"

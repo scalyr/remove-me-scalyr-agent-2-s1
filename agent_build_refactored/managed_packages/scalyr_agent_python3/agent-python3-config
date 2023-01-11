@@ -17,13 +17,11 @@
 This script provide some configuration options for the Agent's Python3 dependency package.
 """
 
-
 import argparse
 import pathlib as pl
 import subprocess
 import sys
 import re
-
 from typing import List
 
 OPENSSL_1_1_1_VERSION = "1_1_1"
