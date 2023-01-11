@@ -73,10 +73,7 @@ def initialize():
                 file=sys.stderr
             )
 
-    if preferred_openssl != "embedded":
-        print(f"Unknown 'preferred_openssl' - {preferred_openssl}", file=sys.stderr)
-        exit(1)
-
+    print("Use embedded OpenSSL.", file=sys.stderr)
     version_to_use = DEFAULT_FALLBACK_OPENSSL_VERSION
     # Could not find any valid system OpenSSL, fallback to embedded one.
     copy_bindings(version_type=version_to_use)
