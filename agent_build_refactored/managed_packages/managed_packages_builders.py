@@ -1258,10 +1258,10 @@ def create_build_python_package_root_steps() -> Dict[Architecture, ArtifactRunne
 
     for architecture in SUPPORTED_ARCHITECTURES:
         build_env_info = _SUPPORTED_ARCHITECTURES_TO_BUILD_ENVIRONMENTS[architecture]
-        if "ubuntu" in build_env_info.image or "centos:6" in build_env_info.image:
-            libssl_dir = "/usr/local/lib"
-        else:
+        if "centos:6" in build_env_info.image:
             libssl_dir = "/usr/local/lib64"
+        else:
+            libssl_dir = "/usr/local/lib"
 
         step = ArtifactRunnerStep(
             name="build_python_package_root",
