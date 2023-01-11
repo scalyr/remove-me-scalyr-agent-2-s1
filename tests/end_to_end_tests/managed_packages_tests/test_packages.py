@@ -167,7 +167,6 @@ def test_packages(
             logger.error(f"Install log:\n{install_log_path.read_text()}\n")
 
         logger.exception("Install script has failed.")
-        subprocess.check_call("dmesg")
         raise
 
     logger.info(
@@ -458,7 +457,7 @@ def _perform_ssl_checks(
 
 # Additional paths to add in case if tests run within "frozen" pytest executable.
 _ADDITIONAL_ENVIRONMENT = {
-    "LD_LIBRARY_PATH": "/lib",
+    "LD_LIBRARY_PATH": "/lib:/lib64",
     "PATH": "/bin:/sbin:/usr/bin:/usr/sbin",
 }
 

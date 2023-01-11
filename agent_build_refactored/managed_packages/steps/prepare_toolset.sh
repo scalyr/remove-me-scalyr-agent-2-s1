@@ -35,10 +35,7 @@ cp -a "${BUILD_PYTHON}/." /
 cp -a "${BUILD_OPENSSL}/." /
 cp -a "${BUILD_DEV_REQUIREMENTS}/root/." /
 
-echo 'export LD_LIBRARY_PATH="/usr/local/lib:/usr/local/lib64:${LD_LIBRARY_PATH}"' >> ~/.bashrc
-echo "/usr/local/lib" >> /etc/ld.so.conf.d/local.conf
-echo "/usr/local/lib64" >> /etc/ld.so.conf.d/local.conf
-
+echo "/opt/scalyr-agent-2-dependencies/lib" >> /etc/ld.so.conf.d/scalyr-agent-python3.conf
 ldconfig
 
 # shellcheck disable=SC1090
