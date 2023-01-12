@@ -64,7 +64,7 @@ def determine_last_prod_version() -> str:
     Get the latest agent production version by looking for git tags.
     """
     subprocess.check_call([
-            "git", "fetch", "--unshallow", "--tags"
+            "git", "fetch", "--tags"
     ])
     output = subprocess.check_output([
         "git", "--no-pager", "tag", "-l"
