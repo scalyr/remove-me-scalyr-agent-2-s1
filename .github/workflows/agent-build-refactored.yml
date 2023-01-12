@@ -7,6 +7,13 @@ on:
     types: [ opened ]
     branches:
       - 'master'
+  workflow_dispatch:
+    inputs:
+      agent_version:
+        description: 'Version of the Agent to build'
+        required: true
+        type: string
+
   schedule:
     - cron: '0 4 * * *'
 
@@ -28,7 +35,7 @@ jobs:
       is_master_run: ${{ steps.init-matrices.outputs.is_master_run }}
       to_publish: ${{ steps.init-matrices.outputs.to_publish }}
       is_production: ${{ steps.init-matrices.outputs.is_production }}
-      version: ${{ steps.init-matrices.outputs.version }}
+      version: ${{ steps.get_agent_version.outputs.version }}
       aws_private_key_name: ${{ steps.init_common_options.outputs.aws_private_key_name }}
       aws_security_group: ${{ steps.init_common_options.outputs.aws_security_group }}
       aws_prefix_list_id: ${{ steps.init_common_options.outputs.aws_prefix_list_id }}
@@ -107,6 +114,20 @@ jobs:
               { "name": "deb-arm64",   "distro-name": "ubuntu1404",    "remote-machine-type": "docker", "master_run_only": false },
               { "name": "rpm-arm64",   "distro-name": "centos7",       "remote-machine-type": "docker", "master_run_only": false }
             ]
+
+      - name: Get Agent Version.
+        id: get_agent_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "agent_version=${{ github.event.inputs.agent_version }}" >> $GITHUB_OUTPUT
+          else
+            echo "agent_version=${{ steps.init-matrices.outputs.version }}" >> $GITHUB_OUTPUT
+          fi
+          echo "!!!!!!"
+          cat $GITHUB_OUTPUT
+          
+        
+
 
   # This job pre-executes and caches Runner steps that has to be executed in a separate job.
   # For example, we build platform-specific base docker images in a separate jobs to reduce overall build time, because
