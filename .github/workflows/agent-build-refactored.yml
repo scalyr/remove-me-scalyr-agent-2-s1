@@ -115,16 +115,16 @@ jobs:
               { "name": "rpm-arm64",   "distro-name": "centos7",       "remote-machine-type": "docker", "master_run_only": false }
             ]
 
-      - name: Get Agent Version.
-        id: get_agent_version
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "agent_version=${{ github.event.inputs.agent_version }}" >> $GITHUB_OUTPUT
-          else
-            echo "agent_version=${{ steps.init-matrices.outputs.version }}" >> $GITHUB_OUTPUT
-          fi
-          echo "!!!!!!"
-          cat $GITHUB_OUTPUT
+#      - name: Get Agent Version.
+#        id: get_agent_version
+#        run: |
+#          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+#            echo "agent_version=${{ github.event.inputs.agent_version }}" >> $GITHUB_OUTPUT
+#          else
+#            echo "agent_version=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+#          fi
+#          echo "!!!!!!"
+#          cat $GITHUB_OUTPUT
           
         
 

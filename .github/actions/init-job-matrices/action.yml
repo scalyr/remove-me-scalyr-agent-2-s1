@@ -60,7 +60,7 @@ runs:
         DEFAULT_PYTHON_VERSION: 3.8.13
       run: |
         set -e
-        
+        python3 agent_build_refactored/scripts/get_workflow_info.py
         python3 agent_build_refactored/scripts/get_workflow_info.py > /tmp/workflow_info.json
         IS_MASTER_RUN="$(cat /tmp/workflow_info.json | jq -c '.is_master_run')"
         echo "is_master_run=${IS_MASTER_RUN}" >> $GITHUB_OUTPUT

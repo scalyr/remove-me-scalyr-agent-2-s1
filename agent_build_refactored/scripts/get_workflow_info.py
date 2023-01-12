@@ -35,6 +35,7 @@ sys.path.append(str(pl.Path(__file__).parent.parent.parent))
 
 # We expect some info from the GitHub actions context to determine if the run is 'master-only' or not.
 GITHUB_EVENT_NAME = os.environ.get("GITHUB_EVENT_NAME", "")
+GITHUB_EVENT = os.environ.get("GITHUB_EVENT", "")
 GITHUB_BASE_REF = os.environ.get("GITHUB_BASE_REF", "")
 GITHUB_REF_TYPE = os.environ.get("GITHUB_REF_TYPE", "")
 GITHUB_REF_NAME = os.environ.get("GITHUB_REF_NAME", "")
@@ -85,15 +86,13 @@ def determine_last_prod_version() -> str:
 PROD_VERSION = determine_last_prod_version()
 
 # Create version for dev build. It's <last_release_version>.<timestamp><commit_sha>
-DEV_VERSION = f"{PROD_VERSION}.{int(time.time())}.{GITHUB_SHA}"
+DEV_VERSION = f"{PROD_VERSION}.{GITHUB_SHA}"
 
+version_to_use = DEV_VERSION
 # We do a full, 'master' workflow run on:
 # pull request against the 'master' branch.
 if GITHUB_EVENT_NAME == "pull_request" and GITHUB_BASE_REF == "master":
     master_run = True
-    to_publish = False
-    is_production = False
-    version = DEV_VERSION
 # push to the 'master' branch
 elif (
     GITHUB_EVENT_NAME == "push"
@@ -101,28 +100,12 @@ elif (
     and GITHUB_REF_NAME == "master"
 ):
     master_run = True
-    to_publish = True
-    is_production = False
-    version = DEV_VERSION
 
-# push to a "production" tag.
-elif GITHUB_EVENT_NAME == "push" and GITHUB_REF_TYPE == "tag":
-    to_publish = True
+elif GITHUB_EVENT_NAME == "workflow_dispatch":
     master_run = True
-    m = re.match(r"^v(\d+\.\d+\.\d+)$", GITHUB_REF_NAME)
-    if m:
-        is_production = True
-        version = m.group(1)
-    else:
-        is_production = False
-        # Use version similar to the dev version, but instead of commit sha, we use tag name.
-        version = f"{PROD_VERSION}.{int(time.time())}.{GITHUB_REF_NAME}"
-
+    version_to_use = json.loads(GITHUB_EVENT)["inputs"]["agent_version"]
 else:
     master_run = is_branch_has_pull_requests()
-    to_publish = False
-    is_production = False
-    version = DEV_VERSION
 
 
 def main():
@@ -141,9 +124,7 @@ def main():
 
     result = {
         "is_master_run": master_run,
-        "to_publish": to_publish,
-        "is_production": is_production,
-        "version": version
+        "version": version_to_use
     }
 
     print(json.dumps(result))
