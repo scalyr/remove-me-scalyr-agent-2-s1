@@ -391,7 +391,7 @@ class RunnerStep:
                 if output_directory.is_symlink():
                     output_directory.unlink()
                 else:
-                    shutil.rmtree(output_directory)
+                    remove_directory_in_docker(output_directory)
 
             symlink_rel_path = pl.Path("../step_cache") / output_directory.name
             output_directory.symlink_to(symlink_rel_path)
@@ -939,6 +939,21 @@ class Runner:
             ]
         )
 
+        # Run chmod for the output directory of the runner, in order to fix possible permission
+        # error that can be due to using root user inside the docker.
+        run_docker_command([
+            "run",
+            "-i",
+            "--rm",
+            "-v",
+            f"{self.output_path}:/tmp/data",
+            "ubuntu:22.04",
+            "chown",
+            "-R",
+            f"{os.getuid()}:{os.getgid()}",
+            "/tmp/data"
+        ])
+
     def run_required(self):
         """
         Function where Runner performs its main actions.
@@ -1168,7 +1183,10 @@ def run_docker_command(
 
     final_command = ["docker", *command]
     if return_output:
-        return subprocess.check_output(final_command, env=env)
+        return subprocess.check_output(
+            final_command,
+            env=env
+        )
 
     subprocess.check_call(final_command, env=env)
 

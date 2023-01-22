@@ -164,9 +164,15 @@ def create_and_deploy_ec2_instance(
             deployment_command = ["bash", str(remote_deployment_script_path)]
 
         if files_to_upload:
-            ssh_put_files(ssh_connection=ssh, files=files_to_upload)
+            ssh_put_files(
+                ssh_connection=ssh,
+                files=files_to_upload
+            )
             if deployment_command:
-                ssh_run_command(ssh_connection=ssh, command=deployment_command)
+                ssh_run_command(
+                    ssh_connection=ssh,
+                    command=deployment_command
+                )
 
         ssh.close()
     except Exception as e:
