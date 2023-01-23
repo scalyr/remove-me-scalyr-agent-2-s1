@@ -307,13 +307,15 @@ def test_agent_package_config_ownership(package_builder, agent_package_path, tmp
 
 
 def test_upgrade(
-        package_builder, repo_url,
+        package_builder,
+        package_builder_name,
+        repo_url,
         repo_public_key_url,
         remote_machine_type,
         distro_name,
         stable_agent_package_version,
         scalyr_api_key,
-        server_host,
+        test_session_suffix,
         agent_version
 ):
     if distro_name == "centos6":
@@ -359,6 +361,11 @@ repo_gpgcheck=0
         raise Exception(f"Unknown package type: {package_builder.PACKAGE_TYPE}")
 
     # Write config
+
+    server_host = (
+        f"package-{package_builder_name}-test-{test_session_suffix}-{int(time.time())}"
+    )
+
     config = {
         "api_key": scalyr_api_key,
         "server_attributes": {"serverHost": server_host},
@@ -401,7 +408,7 @@ repo_gpgcheck=0
     agent_commander.stop()
 
     logger.info("Cleanup")
-    _remove_all_agent_files(package_type=package_builder)
+    _remove_all_agent_files(package_type=package_builder.PACKAGE_TYPE)
 
 
 def _perform_ssl_checks(
