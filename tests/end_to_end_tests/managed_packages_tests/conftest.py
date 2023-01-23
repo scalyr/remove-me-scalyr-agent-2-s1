@@ -12,7 +12,7 @@ import time
 import pytest
 import requests
 
-from agent_build_refactored.tools.constants import Architecture, AGENT_VERSION
+from agent_build_refactored.tools.constants import Architecture, AGENT_VERSION, SOURCE_ROOT
 from agent_build_refactored.tools.runner import Runner, RunnerMappedPath
 from agent_build_refactored.managed_packages.managed_packages_builders import (
     ALL_MANAGED_PACKAGE_BUILDERS,
@@ -20,9 +20,6 @@ from agent_build_refactored.managed_packages.managed_packages_builders import (
     PYTHON_PACKAGE_NAME,
     AGENT_LIBS_PACKAGE_NAME,
     AGENT_PACKAGE_NAME,
-)
-from agent_build_refactored.managed_packages.convenience_install_script.builder import (
-    ConvenienceScriptBuilder,
 )
 from tests.end_to_end_tests.run_in_remote_machine import DISTROS
 
@@ -372,22 +369,29 @@ def repo_url(server_url):
 
 
 @pytest.fixture(scope="session")
-def convenience_script_path(server_url, repo_url):
+def repo_public_key_url(server_url):
+    return f"{server_url}/repo_public_key.gpg"
+
+
+@pytest.fixture(scope="session")
+def convenience_script_path(server_url, repo_url, repo_public_key_url, tmp_path_factory):
     """
     Path to the convenience install script.
     We also start web server that serves mock repo with packages that have to be installed by the
     convenience script.
     """
-    public_key_url = f"{server_url}/repo_public_key.gpg"
 
     # Build convenience script with current repo and public key urls.
-    convenience_script_builder = ConvenienceScriptBuilder()
-    convenience_script_builder.build(
-        repo_url=repo_url,
-        public_key_url=public_key_url,
+    render_install_script_path = SOURCE_ROOT / "agent_build_refactored/managed_packages/convenience_install_script/render_install_agent_script.sh"
+
+    install_script_path = tmp_path_factory.mktemp("install_script") / "install-scalyr-agent-2.sh"
+
+    subprocess.run(
+        ["bash", str(render_install_script_path), repo_url, repo_public_key_url, str(install_script_path)],
+        check=True
     )
 
-    yield convenience_script_builder.output_path / "install-agent.sh"
+    yield install_script_path
 
 
 def _get_package_path_from_repo(
@@ -439,6 +443,8 @@ def agent_package_path(repo_root, package_builder):
         package_filename_glob = (
             f"{AGENT_PACKAGE_NAME}_{AGENT_VERSION}_all.{package_builder.PACKAGE_TYPE}"
         )
+    elif package_builder.PACKAGE_TYPE == "rpm":
+        package_filename_glob = f"{AGENT_PACKAGE_NAME}-{AGENT_VERSION}-1.noarch.{package_builder.PACKAGE_TYPE}"
     else:
         raise Exception(f"Unknown package type: {package_builder.PACKAGE_TYPE}")
 

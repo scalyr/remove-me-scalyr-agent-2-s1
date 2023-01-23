@@ -30,7 +30,7 @@ from typing import List, Dict
 
 import pytest
 
-from agent_build_refactored.tools.constants import SOURCE_ROOT
+from agent_build_refactored.tools.constants import SOURCE_ROOT, AGENT_VERSION
 from agent_build_refactored.managed_packages.managed_packages_builders import (
     PYTHON_PACKAGE_NAME,
     AGENT_LIBS_PACKAGE_NAME,
@@ -147,7 +147,6 @@ def test_packages(
     agent_version,
     tmp_path,
 ):
-    return
     timeout_tracker = TimeoutTracker(400)
     _print_system_information()
     _prepare_environment(
@@ -306,7 +305,20 @@ def test_agent_package_config_ownership(package_builder, agent_package_path, tmp
     ), f"Expected permissions of the 'agent.d' is 751, got {oct_mode}"
 
 
-def test_upgrade(package_builder, repo_url):
+def test_upgrade(package_builder, repo_url, repo_public_key_url, remote_machine_type, distro_name, stable_agent_package_version):
+
+    if distro_name == "centos6":
+        pytest.skip("Can not upgrade from CentOS 6 because out previous variant of packages does not support it.")
+
+    distros_with_python_2 = {
+        "centos7", "ubuntu1404", "ubuntu1604"
+    }
+
+    if distro_name in distros_with_python_2:
+        system_python_package_name = "python"
+    else:
+        system_python_package_name = "python3"
+
     if package_builder.PACKAGE_TYPE == "deb":
         repo_source_list_path = pl.Path("/etc/apt/sources.list.d/scalyr.list")
         repo_source_list_path.write_text(
@@ -314,9 +326,9 @@ def test_upgrade(package_builder, repo_url):
         )
         _call_apt(["update"])
 
-        _call_apt(["install", "-y", "python3"])
+        _call_apt(["install", "-y", system_python_package_name])
         _call_apt(
-            ["install", "-y", "--allow-unauthenticated", f"{AGENT_PACKAGE_NAME}=2.1.40"]
+            ["install", "-y", "--allow-unauthenticated", f"{AGENT_PACKAGE_NAME}={stable_agent_package_version}"]
         )
 
         _call_apt(
@@ -328,6 +340,21 @@ def test_upgrade(package_builder, repo_url):
                 AGENT_PACKAGE_NAME,
             ]
         )
+    elif package_builder.PACKAGE_TYPE == "rpm":
+        yum_repo_file_path = pl.Path("/etc/yum.repos.d/scalyr.repo")
+        yum_repo_file_content = f"""
+[scalyr]
+name=Scalyr packages.
+baseurl={repo_url}
+enabled=1
+gpgcheck=0
+repo_gpgcheck=0
+"""
+        yum_repo_file_path.write_text(yum_repo_file_content)
+        _call_yum(["install", "-y", system_python_package_name])
+        _call_yum(["install", "-y", f"{AGENT_PACKAGE_NAME}-{stable_agent_package_version}"])
+        _call_yum(["install", "-y", AGENT_PACKAGE_NAME])
+
 
 
 def _perform_ssl_checks(
