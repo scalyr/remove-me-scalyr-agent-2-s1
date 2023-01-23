@@ -497,6 +497,9 @@ jobs:
           echo "${{ secrets.CT_AWS_DEV_EC2_PRIVATE_KEY }}" > /tmp/private_key.pem
           chmod 600 /tmp/private_key.pem
           
+          ls -al /tmp/packages
+          echo "!111"
+          
           python3 -m pytest tests/end_to_end_tests/managed_packages_tests \
             -s \
             --builder-name ${{ matrix.name }} \
