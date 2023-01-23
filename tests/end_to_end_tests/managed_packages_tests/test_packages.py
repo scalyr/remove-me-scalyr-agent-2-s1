@@ -134,6 +134,13 @@ def test_dependency_packages(
     )
 
 
+LINUX_PACKAGE_AGENT_PATHS = AgentPaths(
+    configs_dir=pl.Path("/etc/scalyr-agent-2"),
+    logs_dir=pl.Path("/var/log/scalyr-agent-2"),
+    install_root=pl.Path("/usr/share/scalyr-agent-2"),
+)
+
+
 def test_packages(
     package_builder_name,
     package_builder,
@@ -176,14 +183,8 @@ def test_packages(
         },
     )
 
-    agent_paths = AgentPaths(
-        configs_dir=pl.Path("/etc/scalyr-agent-2"),
-        logs_dir=pl.Path("/var/log/scalyr-agent-2"),
-        install_root=pl.Path("/usr/share/scalyr-agent-2"),
-    )
-
     logger.info("Verifying install_info.json file exists")
-    install_info_path = agent_paths.install_root / "py/scalyr_agent/install_info.json"
+    install_info_path = LINUX_PACKAGE_AGENT_PATHS.install_root / "py/scalyr_agent/install_info.json"
     assert install_info_path.is_file(), f"The {install_info_path} file is missing."
 
     logger.info("Verifying rc.d symlinks exist")
@@ -194,7 +195,7 @@ def test_packages(
         f"package-{package_builder_name}-test-{test_session_suffix}-{int(time.time())}"
     )
 
-    upload_test_log_path = agent_paths.logs_dir / "test.log"
+    upload_test_log_path = LINUX_PACKAGE_AGENT_PATHS.logs_dir / "test.log"
 
     config = {
         "api_key": scalyr_api_key,
@@ -203,7 +204,7 @@ def test_packages(
     }
 
     agent_commander = AgentCommander(
-        executable_args=["scalyr-agent-2"], agent_paths=agent_paths
+        executable_args=["scalyr-agent-2"], agent_paths=LINUX_PACKAGE_AGENT_PATHS
     )
 
     agent_commander.agent_paths.agent_config_path.write_text(json.dumps(config))
@@ -243,7 +244,7 @@ def test_packages(
     _perform_ssl_checks(
         default_config=config,
         agent_commander=agent_commander,
-        agent_paths=agent_paths,
+        agent_paths=LINUX_PACKAGE_AGENT_PATHS,
         timeout_tracker=timeout_tracker,
     )
     # TODO: Add actual agent package testing here.
@@ -305,15 +306,26 @@ def test_agent_package_config_ownership(package_builder, agent_package_path, tmp
     ), f"Expected permissions of the 'agent.d' is 751, got {oct_mode}"
 
 
-def test_upgrade(package_builder, repo_url, repo_public_key_url, remote_machine_type, distro_name, stable_agent_package_version):
-
+def test_upgrade(
+        package_builder, repo_url,
+        repo_public_key_url,
+        remote_machine_type,
+        distro_name,
+        stable_agent_package_version,
+        scalyr_api_key,
+        server_host,
+        agent_version
+):
     if distro_name == "centos6":
         pytest.skip("Can not upgrade from CentOS 6 because out previous variant of packages does not support it.")
+
+    timeout_tracker = TimeoutTracker(100)
 
     distros_with_python_2 = {
         "centos7", "ubuntu1404", "ubuntu1604"
     }
 
+    logger.info("Install stable version of the agent")
     if distro_name in distros_with_python_2:
         system_python_package_name = "python"
     else:
@@ -330,16 +342,6 @@ def test_upgrade(package_builder, repo_url, repo_public_key_url, remote_machine_
         _call_apt(
             ["install", "-y", "--allow-unauthenticated", f"{AGENT_PACKAGE_NAME}={stable_agent_package_version}"]
         )
-
-        _call_apt(
-            [
-                "install",
-                "-y",
-                "--only-upgrade",
-                "--allow-unauthenticated",
-                AGENT_PACKAGE_NAME,
-            ]
-        )
     elif package_builder.PACKAGE_TYPE == "rpm":
         yum_repo_file_path = pl.Path("/etc/yum.repos.d/scalyr.repo")
         yum_repo_file_content = f"""
@@ -353,8 +355,53 @@ repo_gpgcheck=0
         yum_repo_file_path.write_text(yum_repo_file_content)
         _call_yum(["install", "-y", system_python_package_name])
         _call_yum(["install", "-y", f"{AGENT_PACKAGE_NAME}-{stable_agent_package_version}"])
-        _call_yum(["install", "-y", AGENT_PACKAGE_NAME])
+    else:
+        raise Exception(f"Unknown package type: {package_builder.PACKAGE_TYPE}")
 
+    # Write config
+    config = {
+        "api_key": scalyr_api_key,
+        "server_attributes": {"serverHost": server_host},
+    }
+
+    agent_commander = AgentCommander(
+        executable_args=["scalyr-agent-2"], agent_paths=LINUX_PACKAGE_AGENT_PATHS
+    )
+
+    agent_commander.agent_paths.agent_config_path.write_text(json.dumps(config))
+
+    logger.info("Upgrade agent")
+    if package_builder.PACKAGE_TYPE == "deb":
+        _call_apt(
+            [
+                "install",
+                "-y",
+                "--only-upgrade",
+                "--allow-unauthenticated",
+                AGENT_PACKAGE_NAME,
+            ]
+        )
+    elif package_builder.PACKAGE_TYPE == "rpm":
+        _call_yum(["install", "-y", AGENT_PACKAGE_NAME])
+    else:
+        raise Exception(f"Unknown package type: {package_builder.PACKAGE_TYPE}")
+
+    logger.info("Verify that agent config remains after upgrade.")
+    assert LINUX_PACKAGE_AGENT_PATHS.agent_config_path.exists()
+    assert server_host in LINUX_PACKAGE_AGENT_PATHS.agent_config_path.read_text()
+
+    agent_commander.start()
+
+    verify_agent_status(
+        agent_version=agent_version,
+        agent_commander=agent_commander,
+        timeout_tracker=timeout_tracker,
+    )
+
+    agent_commander.stop()
+
+    logger.info("Cleanup")
+    _remove_all_agent_files(package_type=package_builder)
 
 
 def _perform_ssl_checks(
@@ -679,8 +726,12 @@ def _remove_all_agent_files(package_type: str):
         source_list_path = pl.Path("/etc/apt/sources.list.d/scalyr.list")
         source_list_path.unlink()
 
-        pl.Path("/usr/share/keyrings/scalyr.gpg").unlink()
-        pl.Path("/usr/share/keyrings/scalyr.gpg~").unlink()
+        keyring_path = pl.Path("/usr/share/keyrings/scalyr.gpg")
+        if keyring_path.exists():
+            keyring_path.unlink()
+        tmp_keyring_path = pl.Path("/usr/share/keyrings/scalyr.gpg~")
+        if tmp_keyring_path.exists():
+            tmp_keyring_path.unlink()
         _call_apt(["update"])
 
     elif package_type == "rpm":
