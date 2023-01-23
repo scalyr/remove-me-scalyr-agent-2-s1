@@ -700,7 +700,7 @@ def _run_shell(command: str, return_output: bool = False, env=None):
 def _call_apt(command: List[str]):
     """Run apt command"""
     subprocess.check_call(
-        ["apt", *command],
+        ["apt-get", *command],
         # Since test may run in "frozen" pytest executable, add missing variables.
         env={"LD_LIBRARY_PATH": "/lib", "PATH": "/usr/sbin:/sbin:/usr/bin:/bin"},
     )
