@@ -62,10 +62,6 @@ function copy_and_patch_openssl_libs() {
   libssl_path="$(find "${openssl_libs_dir}" -name "libssl.so.*")"
   local libcrypto_path
   libcrypto_path="$(find "${openssl_libs_dir}" -name "libcrypto.so.*")"
-  local libssl_filename
-  libssl_filename="$(basename "${libssl_path}")"
-  local libcrypto_filename
-  libcrypto_filename="$(basename "${libcrypto_path}")"
 
   mkdir -p "${dst_dir}"
   # Copy shared objects and other files of the OpenSSL library.
@@ -84,27 +80,9 @@ function copy_and_patch_openssl_libs() {
 
   # Copy original ssl and hashlib C bindings. They will be used in case if appropriate OpenSSL version is
   # found on system.
-  local original_bindings_dir="${bindings_dir}/original"
-  mkdir -p "${original_bindings_dir}"
-  cp "${ssl_binding_path}" "${original_bindings_dir}"
-  cp "${hashlib_binding_path}" "${original_bindings_dir}"
-
-  # In case if there is no appropriate system OpenSSL, we also copy the same C bindings, but which are hardcoded
-  # to use OpenSSL shared objects that are shipped with the package.
-  local patched_bindings_dir="${bindings_dir}/patched"
-  mkdir -p "${patched_bindings_dir}"
-  local patched_ssl_binding_path
-  patched_ssl_binding_path="${patched_bindings_dir}/$(basename "${ssl_binding_path}")"
-  local patched_hashlib_binding_path
-  patched_hashlib_binding_path="${patched_bindings_dir}/$(basename "${hashlib_binding_path}")"
-  cp "${ssl_binding_path}" "${patched_bindings_dir}"
-  cp "${hashlib_binding_path}" "${patched_bindings_dir}"
-
-  new_dependencies_dir="$(realpath --relative-to "${PACKAGE_ROOT}" "${dst_dir}")"
-  # Patch ssl and hashlib C bindings and hardcode package's shared objects as dependencies.
-  patchelf --replace-needed "${libssl_filename}" "/${new_dependencies_dir}/${libssl_filename}" "${patched_ssl_binding_path}"
-  patchelf --replace-needed "${libcrypto_filename}" "/${new_dependencies_dir}/${libcrypto_filename}" "${patched_ssl_binding_path}"
-  patchelf --replace-needed "${libcrypto_filename}" "/${new_dependencies_dir}/${libcrypto_filename}" "${patched_hashlib_binding_path}"
+  mkdir -p "${bindings_dir}"
+  cp "${ssl_binding_path}" "${bindings_dir}"
+  cp "${hashlib_binding_path}" "${bindings_dir}"
 }
 
 # Copy ssl modules and libraries which are compiled for OpenSSL 1.1.1
@@ -113,17 +91,27 @@ copy_and_patch_openssl_libs "${BUILD_OPENSSL_1_1_1}${LIBSSL_DIR}" "${BUILD_PYTHO
 copy_and_patch_openssl_libs "${BUILD_OPENSSL_3}${LIBSSL_DIR}" "${BUILD_PYTHON_WITH_OPENSSL_3}" "${OPENSSL_LIBS_DIR}/3"
 
 
-# Patch Python executable and hardcode libpython.so, so runtime linker does not have to search for it.
-patchelf --replace-needed \
-  "libpython${PYTHON_SHORT_VERSION}.so.1.0" \
-  "${INSTALL_PREFIX}/lib/libpython${PYTHON_SHORT_VERSION}.so.1.0" \
-  "${PACKAGE_ROOT}${INSTALL_PREFIX}/bin/python${PYTHON_SHORT_VERSION}"
+RESULT_PYTHON_SSL_BINDINGS_DIR="${PACKAGE_ROOT}${INSTALL_PREFIX}/lib/python${PYTHON_SHORT_VERSION}/lib-dynload"
+rm "$(get_standard_c_binding_path "${RESULT_PYTHON_SSL_BINDINGS_DIR}" _ssl.cpython-*-*-*-*.so)"
+rm "$(get_standard_c_binding_path "${RESULT_PYTHON_SSL_BINDINGS_DIR}" _hashlib.cpython-*-*-*-*.so)"
 
 # Copy package scriptlets
 cp -a "${SOURCE_ROOT}/agent_build_refactored/managed_packages/scalyr_agent_python3/install-scriptlets" "${STEP_OUTPUT_PATH}/scriptlets"
 
 # Copy executable that allows configure the package.
 cp "${SOURCE_ROOT}/agent_build_refactored/managed_packages/scalyr_agent_python3/agent-python3-config" "${PACKAGE_ROOT}${INSTALL_PREFIX}/bin"
+
+PACKAGE_BIN_DIR="${PACKAGE_ROOT}${INSTALL_PREFIX}/bin"
+cp "${SOURCE_ROOT}/agent_build_refactored/managed_packages/scalyr_agent_python3/agent-python3-config" "${PACKAGE_BIN_DIR}"
+cp "${SOURCE_ROOT}/agent_build_refactored/managed_packages/scalyr_agent_python3/run_ld_wrapped_python" "${PACKAGE_BIN_DIR}"
+cp "${SOURCE_ROOT}/agent_build_refactored/managed_packages/scalyr_agent_python3/python3_wrapper" "${PACKAGE_BIN_DIR}"
+cp "${SOURCE_ROOT}/agent_build_refactored/managed_packages/scalyr_agent_python3/python3_openssl_embedded" "${PACKAGE_BIN_DIR}"
+
+PACKAGE_BIN_OPENSSL_DIR="${PACKAGE_BIN_DIR}/openssl"
+mkdir -p "${PACKAGE_BIN_OPENSSL_DIR}"
+cp -r "${SOURCE_ROOT}/agent_build_refactored/managed_packages/scalyr_agent_python3/openssl_init_snippets" "${PACKAGE_BIN_OPENSSL_DIR}"
+cp "${SOURCE_ROOT}/agent_build_refactored/managed_packages/scalyr_agent_python3/openssl_init_snippets/openssl_embedded.sh" "${PACKAGE_BIN_OPENSSL_DIR}/init_openssl.sh"
+
 
 # Copy package's configuration files.
 ETC_DIR="${PACKAGE_ROOT}${INSTALL_PREFIX}/etc"

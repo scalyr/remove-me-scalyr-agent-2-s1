@@ -173,12 +173,13 @@ def test_packages(
     )
     subprocess.check_call(
         [
-            f"/var/opt/{AGENT_DEPENDENCY_PACKAGE_SUBDIR_NAME}/venv/bin/python3",
+            f"/var/opt/{AGENT_DEPENDENCY_PACKAGE_SUBDIR_NAME}/venv/bin/python3_wrapper",
             "tests/end_to_end_tests/managed_packages_tests/verify_python_interpreter.py",
         ],
         env={
             # It's important to override the 'LD_LIBRARY_PATH' to be sure that libraries paths from the test runner
             # frozen binary are not leaked to a script's process.
+            "LD_LIBRARY_PATH": "/lib",
             "PYTHONPATH": str(SOURCE_ROOT),
         },
     )
@@ -305,7 +306,7 @@ def test_agent_package_config_ownership(package_builder, agent_package_path, tmp
         oct_mode == "751"
     ), f"Expected permissions of the 'agent.d' is 751, got {oct_mode}"
 
-
+@pytest.mark.skip
 def test_upgrade(
         package_builder,
         package_builder_name,

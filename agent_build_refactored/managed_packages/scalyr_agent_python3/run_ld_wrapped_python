@@ -13,5 +13,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+set -e
 
-exec "/var/opt/scalyr-agent-2-dependencies/venv/bin/python3_wrapper" "/usr/share/scalyr-agent-2/py/scalyr_agent/agent_main.py" "$@"
+DEPENDENCIES_ROOT="/opt/scalyr-agent-2-dependencies"
+
+EXECUTABLE="${1}"
+shift
+OPENSSL_INIT_SNIPPET="${1}"
+shift
+
+# shellcheck source=/dev/null
+source "${OPENSSL_INIT_SNIPPET}"
+
+DEPENDENCIES_LIB_DIR="${DEPENDENCIES_ROOT}/lib"
+
+if $IS_EMBEDDED ; then
+  LD_LIBRARY_PATH="${DEPENDENCIES_LIB_DIR}/openssl/${OPENSSL_VARIANT}:${LD_LIBRARY_PATH}"
+fi
+
+export LD_LIBRARY_PATH="${DEPENDENCIES_LIB_DIR}:${LD_LIBRARY_PATH}"
+
+exec "${EXECUTABLE}" "$@"

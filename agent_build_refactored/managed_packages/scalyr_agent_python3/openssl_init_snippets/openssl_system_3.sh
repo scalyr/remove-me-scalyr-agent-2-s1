@@ -13,5 +13,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-exec "/var/opt/scalyr-agent-2-dependencies/venv/bin/python3_wrapper" "/usr/share/scalyr-agent-2/py/scalyr_agent/agent_main.py" "$@"
+export OPENSSL_VARIANT="3"
+export IS_EMBEDDED=false

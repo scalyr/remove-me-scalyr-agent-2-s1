@@ -1387,6 +1387,12 @@ def create_build_python_package_root_steps() -> Dict[Architecture, ArtifactRunne
             script_path="agent_build_refactored/managed_packages/steps/build_python_package_root.sh",
             tracked_files_globs=[
                 "agent_build_refactored/managed_packages/scalyr_agent_python3/agent-python3-config",
+                "agent_build_refactored/managed_packages/scalyr_agent_python3/run_ld_wrapped_python",
+                "agent_build_refactored/managed_packages/scalyr_agent_python3/python3_wrapper",
+                "agent_build_refactored/managed_packages/scalyr_agent_python3/python3_openssl_embedded",
+                "agent_build_refactored/managed_packages/scalyr_agent_python3/openssl_init_snippets/openssl_embedded.sh",
+                "agent_build_refactored/managed_packages/scalyr_agent_python3/openssl_init_snippets/openssl_system_1_1_1.sh",
+                "agent_build_refactored/managed_packages/scalyr_agent_python3/openssl_init_snippets/openssl_system_3.sh",
                 "agent_build_refactored/managed_packages/scalyr_agent_python3/install-scriptlets/postinstall.sh",
                 "agent_build_refactored/managed_packages/scalyr_agent_python3/install-scriptlets/preuninstall.sh",
             ],
@@ -1514,6 +1520,7 @@ def create_build_agent_libs_package_root_steps() -> Dict[
             tracked_files_globs=[
                 "agent_build_refactored/managed_packages/scalyr_agent_libs/additional-requirements.txt",
                 "agent_build_refactored/managed_packages/scalyr_agent_libs/agent-libs-config",
+                "agent_build_refactored/managed_packages/scalyr_agent_libs/python3_wrapper",
                 "agent_build_refactored/managed_packages/scalyr_agent_libs/install-scriptlets/postinstall.sh",
             ],
             base=PREPARE_TOOLSET_STEPS[Architecture.X86_64],
