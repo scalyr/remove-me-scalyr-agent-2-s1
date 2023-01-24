@@ -147,7 +147,8 @@ VERSION=
 SCALYR_SERVER=
 
 
-REPOSITORY_URL="{ % REPLACE_REPOSITORY_URL % }"
+APT_REPOSITORY_URL="{ % REPLACE_APT_REPOSITORY_URL % }"
+YUM_REPOSITORY_URL="{ % REPLACE_YUM_REPOSITORY_URL % }"
 PUBLIC_KEY_URL="{ % REPLACE_PUBLIC_KEY_URL % }"
 
 # Handle the options
@@ -337,7 +338,7 @@ if [[ $REPO_TYPE == "yum" ]]; then
   cat << EOM >> /etc/yum.repos.d/scalyr.repo
 [scalyr]
 name=Scalyr packages.
-baseurl=${REPOSITORY_URL}
+baseurl=${YUM_REPOSITORY_URL}
 enabled=1
 gpgcheck=0
 repo_gpgcheck=1
@@ -388,7 +389,7 @@ else
   chmod 644 "${PUBLIC_KEY_PATH}"
 
   echo "Adding the scalyr agent repository."
-  echo "deb ${REPO_OPTIONS} ${REPOSITORY_URL} scalyr main" > /etc/apt/sources.list.d/scalyr.list
+  echo "deb ${REPO_OPTIONS} ${APT_REPOSITORY_URL} scalyr main" > /etc/apt/sources.list.d/scalyr.list
 
   echo "Update scalyr repository."
   run_command "apt-get -y update";

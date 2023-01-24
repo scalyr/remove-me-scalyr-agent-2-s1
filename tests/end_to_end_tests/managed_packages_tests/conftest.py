@@ -263,6 +263,8 @@ class RepoBuilder(Runner):
 
 @pytest.fixture(scope="session")
 def stable_agent_package_version():
+    # TODO: For now we just hardcode the particular version, when first release is done
+    # it has to be changed to version for repository.
     return "2.1.40"
 
 
@@ -270,6 +272,12 @@ def stable_agent_package_version():
 def stable_version_packages(
     package_builder, tmp_path_factory, stable_agent_package_version
 ):
+    """
+    Fixture directory with packages of the current stable version of the agent.
+    Stable packages are needed to perform upgrade test and to verify that release stable
+    packages can be upgraded by current packages.
+    """
+
     stable_repo_url = "https://scalyr-repo.s3.amazonaws.com/stable"
     if package_builder.PACKAGE_TYPE == "deb":
         file_name = f"scalyr-agent-2_{stable_agent_package_version}_all.deb"
@@ -387,7 +395,14 @@ def convenience_script_path(server_url, repo_url, repo_public_key_url, tmp_path_
     install_script_path = tmp_path_factory.mktemp("install_script") / "install-scalyr-agent-2.sh"
 
     subprocess.run(
-        ["bash", str(render_install_script_path), repo_url, repo_public_key_url, str(install_script_path)],
+        [
+            "bash",
+            str(render_install_script_path),
+            repo_url,
+            repo_url,
+            repo_public_key_url,
+            str(install_script_path)
+        ],
         check=True
     )
 
