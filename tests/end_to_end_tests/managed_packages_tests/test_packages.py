@@ -306,7 +306,7 @@ def test_agent_package_config_ownership(package_builder, agent_package_path, tmp
         oct_mode == "751"
     ), f"Expected permissions of the 'agent.d' is 751, got {oct_mode}"
 
-@pytest.mark.skip
+
 def test_upgrade(
         package_builder,
         package_builder_name,
