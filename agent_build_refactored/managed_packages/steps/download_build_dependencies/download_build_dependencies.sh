@@ -230,9 +230,7 @@ BZIP2_GPG_KEY_PATH="${SOURCE_ROOT}/agent_build_refactored/managed_packages/steps
 
 mkdir "${STEP_OUTPUT_PATH}/bzip2"
 pushd "${STEP_OUTPUT_PATH}/bzip2"
-curl -L "https://sourceware.org/pub/bzip2/bzip2-${BZIP_VERSION}.tar.gz" > bzip2.tar.gz
-curl -L "https://sourceware.org/pub/bzip2/bzip2-${BZIP_VERSION}.tar.gz.sig" > bzip2.tar.gz.sig
-gpg --verify --keyring "${BZIP2_GPG_KEY_PATH}" bzip2.tar.gz.sig bzip2.tar.gz
+curl -L "https://gitlab.com/bzip2/bzip2/-/archive/bzip2-${BZIP_VERSION}/bzip2-bzip2-${BZIP_VERSION}.tar.gz" > bzip2.tar.gz
 popd
 
 clear_public_keys

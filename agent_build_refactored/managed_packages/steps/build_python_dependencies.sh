@@ -64,7 +64,7 @@ popd
 mkdir /tmp/build-bzip
 pushd /tmp/build-bzip
 tar -xvf "${DOWNLOAD_BUILD_DEPENDENCIES}/bzip2/bzip2.tar.gz"
-pushd "bzip2-${BZIP_VERSION}"
+pushd "bzip2-bzip2-${BZIP_VERSION}"
 make install  CFLAGS="-fPIC" PREFIX="${DESTDIR_ROOT}/usr/local" -j "$(nproc)"
 popd
 popd
