@@ -67,6 +67,9 @@ jobs:
 
 
   prepare-artifacts:
+    needs:
+      - build-linux-packages
+      - build_tarball
     runs-on: ubuntu-20.04
 
     steps:
