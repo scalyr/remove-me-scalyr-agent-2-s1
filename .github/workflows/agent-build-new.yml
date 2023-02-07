@@ -78,14 +78,21 @@ jobs:
 
       - uses: actions/download-artifact@v3
         with:
-          path: ~/tmp/all_artifacts
+          path: /tmp/all_artifacts
 
       - name: Pick needed artifacts
         run: |
           mkdir /tmp/artifacts
           
-          cp -a ~/tmp/all_artifacts/linux-packages-*/. /tmp/artifacts 
-          cp -a ~/tmp/all_artifacts/tarball-noarch/. /tmp/artifacts 
+          cp -a /tmp/all_artifacts/linux-packages-*/. /tmp/artifacts 
+          cp -a /tmp/all_artifacts/tarball-noarch/. /tmp/artifacts 
+
+      - name: Save tarball as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: artifacts
+          path: /tmp/artifacts
+          retention-days: 1
           
 
 
