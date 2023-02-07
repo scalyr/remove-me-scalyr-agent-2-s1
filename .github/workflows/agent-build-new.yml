@@ -84,10 +84,10 @@ jobs:
         run: |
           mkdir /tmp/artifacts
           
-          cp -a /tmp/all_artifacts/linux-packages-*/. /tmp/artifacts 
+          cp -a /tmp/all_artifacts/linux-packages-*/packages/. /tmp/artifacts 
           cp -a /tmp/all_artifacts/tarball-noarch/. /tmp/artifacts 
 
-      - name: Save tarball as artifact
+      - name: Save artifacts
         uses: actions/upload-artifact@v3
         with:
           name: artifacts
