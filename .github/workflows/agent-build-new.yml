@@ -8,7 +8,9 @@ on:
     branches:
       - 'master'
   workflow_dispatch:
-
+    inputs:
+      dependency_packages_versions_json:
+        type: string
 
   schedule:
     - cron: '0 4 * * *'
@@ -62,3 +64,25 @@ jobs:
           status: ${{ job.status }}
           steps: ${{ toJson(steps) }}
           channel: '#eng-dataset-cloud-tech'
+
+
+  prepare-artifacts:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - uses: actions/download-artifact@v3
+        with:
+          path: ~/tmp/all_artifacts
+
+      - name: Pick needed artifacts
+        run: |
+          mkdir /tmp/artifacts
+          
+          cp -a ~/tmp/all_artifacts/linux-packages-*/. /tmp/artifacts 
+          cp -a ~/tmp/all_artifacts/tarball-noarch/. /tmp/artifacts 
+          
+
+

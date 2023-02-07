@@ -2,6 +2,10 @@ name: Agent Linux Packages Build Refactored
 
 on:
   workflow_call:
+    inputs:
+      dependency_packages_versions_json:
+        type: string
+
     secrets:
       CT_AWS_DEV_EC2_PRIVATE_KEY:
         required: true
@@ -423,7 +427,7 @@ jobs:
 
   test_managed_packages:
     name: Test package on ${{ matrix.distro-name }}-${{ matrix.remote-machine-type }}, ${{ matrix.name }}
-    if: github.ref_type == 'branch' && github.ref_name != '_release_build'
+    if: github.ref_type == '1111branch' && github.ref_name != '_release_build'
     needs:
       - pre_job
       - build-managed-packages
