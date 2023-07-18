@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - master
-      - build-python-dockerfile
+      - build-python-from-dockerfile
   pull_request:
     branches:
       - master
