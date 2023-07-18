@@ -35,6 +35,7 @@ from agent_build_refactored.managed_packages.managed_packages_builders import (
     ALL_PACKAGE_BUILDERS,
     ALL_AIO_PACKAGE_BUILDERS,
     PORTABLE_PYTEST_RUNNER_NAME,
+    build_dependencies,
 )
 from agent_build_refactored.tools.constants import CpuArch, LibC, SOURCE_ROOT
 from agent_build_refactored.tools.common import init_logging
@@ -94,16 +95,20 @@ class RemoteTestDependenciesBuilder(Builder):
         )
 
         if is_aio:
-            aio_builder = self.__class__.PACKAGE_BUILDER
+            architecture = self.__class__.PACKAGE_BUILDER.ARCHITECTURE
         else:
-            aio_builder = ALL_PACKAGE_BUILDERS["aio-x86_64"]
+            architecture = CpuArch.x86_64
 
         python_dependency_dir = self.work_dir / "python_dependency"
-        aio_builder.build_dependencies(
-            output=LocalDirectoryBuildOutput(
-                dest=python_dependency_dir,
-            )
+        build_dependencies(
+            architecture=architecture,
+            output_dir=python_dependency_dir,
         )
+        # aio_builder.build_dependencies(
+        #     output=LocalDirectoryBuildOutput(
+        #         dest=python_dependency_dir,
+        #     )
+        # )
         shutil.copy(
             python_dependency_dir / PORTABLE_PYTEST_RUNNER_NAME,
             self.result_dir,

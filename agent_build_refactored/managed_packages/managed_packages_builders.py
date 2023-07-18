@@ -100,7 +100,7 @@ import subprocess
 import argparse
 import pathlib as pl
 import re
-from typing import List, Dict, Type, Union
+from typing import List, Dict, Type, Union, Set
 
 
 from agent_build_refactored.tools.builder import Builder
@@ -111,6 +111,7 @@ from agent_build_refactored.tools.constants import (
     REQUIREMENTS_AGENT_COMMON,
     REQUIREMENTS_AGENT_COMMON_PLATFORM_DEPENDENT,
     CURRENT_MACHINE_CPU_ARCHITECTURE,
+    AGENT_BUILD_OUTPUT_PATH,
 )
 
 from agent_build_refactored.prepare_agent_filesystem import (
@@ -494,6 +495,81 @@ class LinuxNonAIOPackageBuilder(LinuxPackageBuilder):
         # )
 
 
+_already_build_dependencies: Set[CpuArch] = set()
+
+
+def build_dependencies(
+        architecture: CpuArch,
+        output_dir: pl.Path,
+):
+    global _already_build_dependencies
+
+    result_dir = AGENT_BUILD_OUTPUT_PATH / "packages_dependency_python" / architecture.value
+
+    def _copy_output():
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        shutil.copytree(
+            result_dir,
+            output_dir,
+            dirs_exist_ok=True,
+            symlinks=True,
+        )
+
+    if architecture in _already_build_dependencies:
+        _copy_output()
+        return
+
+    rust_platform = f"{architecture.value}-unknown-linux-gnu"
+
+    python_x_y_version = ".".join(PYTHON_VERSION.split(".")[:2])
+
+    build_args = {
+        "ARCH": architecture.value,
+        "PYTHON_VERSION": PYTHON_VERSION,
+        "PYTHON_X_Y_VERSION": python_x_y_version,
+        "PYTHON_INSTALL_PREFIX": str(PYTHON_INSTALL_PREFIX),
+        "DEPENDENCIES_INSTALL_PREFIX": str(DEPENDENCIES_INSTALL_PREFIX),
+        "REQUIREMENTS_FILE_CONTENT": AGENT_REQUIREMENTS,
+        "PORTABLE_RUNNER_NAME": PORTABLE_PYTEST_RUNNER_NAME,
+        "RUST_VERSION": "1.63.0",
+        "RUST_PLATFORM": rust_platform,
+        "BZIP_VERSION": "1.0.8",
+        "LIBEDIT_VERSION_COMMIT": "0cdd83b3ebd069c1dee21d81d6bf716cae7bf5da",  # tag - "upstream/3.1-20221030",
+        "LIBFFI_VERSION": "3.4.2",
+        "NCURSES_VERSION": "6.3",
+        "OPENSSL_1_VERSION": OPENSSL_1_VERSION,
+        "OPENSSL_3_VERSION": OPENSSL_3_VERSION,
+        "TCL_VERSION_COMMIT": "338c6692672696a76b6cb4073820426406c6f3f9",  # tag - "core-8-6-13",
+        "SQLITE_VERSION_COMMIT": "e671c4fbc057f8b1505655126eaf90640149ced6",  # tag - "version-3.41.2",
+        "UTIL_LINUX_VERSION": "2.38",
+        "XZ_VERSION": "5.2.6",
+        "ZLIB_VERSION": "1.2.13",
+    }
+
+    cache_scope = f"packages_python_{architecture.value}"
+
+    if result_dir.exists():
+        shutil.rmtree(result_dir)
+
+    result_dir.mkdir(parents=True)
+
+    buildx_build(
+        dockerfile_path=_DEPENDENCIES_DIR / "Dockerfile",
+        context_path=SOURCE_ROOT,
+        architecture=architecture,
+        build_args=build_args,
+        output=LocalDirectoryBuildOutput(
+            dest=result_dir,
+        ),
+        cache_name=cache_scope,
+        fallback_to_remote_builder=True
+    )
+    _already_build_dependencies.add(architecture)
+    _copy_output()
+    return
+
+
 class LinuxAIOPackagesBuilder(LinuxPackageBuilder):
     """
     This builder creates "all in one" (aio) version of the agent package.
@@ -508,6 +584,7 @@ class LinuxAIOPackagesBuilder(LinuxPackageBuilder):
         cls,
         output: BuildOutput,
     ):
+
 
         rust_platform = f"{cls.ARCHITECTURE.value}-unknown-linux-gnu"
 
@@ -555,11 +632,16 @@ class LinuxAIOPackagesBuilder(LinuxPackageBuilder):
         """
 
         dependencies_dir = self.work_dir / "dependencies"
-        self.build_dependencies(
-            output=LocalDirectoryBuildOutput(
-                dest=dependencies_dir,
-            )
+
+        build_dependencies(
+            architecture=self.__class__.ARCHITECTURE,
+            output_dir=dependencies_dir,
         )
+        # self.build_dependencies(
+        #     output=LocalDirectoryBuildOutput(
+        #         dest=dependencies_dir,
+        #     )
+        # )
 
         python_dependency_dir = dependencies_dir / "python"
 

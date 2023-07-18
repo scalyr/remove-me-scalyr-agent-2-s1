@@ -5,13 +5,16 @@ from typing import Union, Type
 
 import requests
 
+from agent_build_refactored.tools.constants import CpuArch
+from agent_build_refactored.tools.docker.buildx.build import buildx_build, LocalDirectoryBuildOutput
+from agent_build_refactored.tools.toolset_image import build_toolset_image_oci_layout
 from agent_build_refactored.managed_packages.managed_packages_builders import (
     LinuxAIOPackagesBuilder,
     LinuxNonAIOPackageBuilder,
 )
-from tests.end_to_end_tests.managed_packages_tests.remote_machine_tests.tools.repo_builder import AptRepoBuilder, YumRepoBuilder
 
 _STABLE_REPO_URL = "https://scalyr-repo.s3.amazonaws.com/stable"
+_PARENT_DIR = pl.Path(__file__).parent
 
 
 def get_packages_stable_version(version: str = None):
@@ -89,32 +92,29 @@ def create_packages_repo_root(
         else:
             packages_dir = pl.Path(packages_source)
 
-        repo_packages_dir = output_dir / "repo_packages"
-        repo_packages_dir.mkdir(parents=True)
-        shutil.copytree(packages_dir, repo_packages_dir, dirs_exist_ok=True)
+        all_packages_dir = output_dir / "all_packages"
+        all_packages_dir.mkdir(parents=True)
+        shutil.copytree(packages_dir, all_packages_dir, dirs_exist_ok=True)
 
         download_stable_packages(
             package_type=package_type,
             packages_version=stable_packages_version,
-            output_dir=repo_packages_dir,
+            output_dir=all_packages_dir,
         )
 
         # Build mock repo from packages.
         if package_type == "deb":
-            repo_builder = AptRepoBuilder(
-                packages_dir=repo_packages_dir
-            )
+            repo_type = "apt"
         elif package_type == "rpm":
-            repo_builder = YumRepoBuilder(
-                packages_dir=repo_packages_dir
-            )
+            repo_type = "yum"
         else:
             raise Exception(f"Unknown package type: {package_type}")
 
-        repo_builder.build(
-            output_dir=packages_repo_root,
+        build_repo(
+            repo_type=repo_type,
+            packages_dir=all_packages_dir,
+            output_dir=packages_repo_root
         )
-        shutil.copytree(repo_builder.result_dir, packages_repo_root, dirs_exist_ok=True)
 
     return packages_repo_root
 
@@ -122,3 +122,33 @@ def create_packages_repo_root(
 def is_builder_creates_aio_package(package_builder_name: str):
     """Tells whether builder given name produces AIO package or not"""
     return "non-aio" not in package_builder_name
+
+
+def build_repo(
+    repo_type: str,
+    packages_dir: pl.Path,
+    output_dir: pl.Path,
+):
+    """
+    Use packages from the given directory and create repository from them using docker build.
+    :param repo_type: Typ of the repo, e.g. apt or yum
+    :param packages_dir: Directory with packages to add to repo.
+    :param output_dir: Path to a resulting directory with repo
+    """
+    toolset_oci_layout_path = build_toolset_image_oci_layout()
+
+    buildx_build(
+        dockerfile_path=_PARENT_DIR / "Dockerfile",
+        context_path=_PARENT_DIR,
+        architecture=CpuArch.x86_64,
+        build_args={
+            "REPO_TYPE": repo_type,
+        },
+        build_contexts={
+            "toolset": f"oci-layout://{toolset_oci_layout_path}",
+            "packages": str(packages_dir),
+        },
+        output=LocalDirectoryBuildOutput(
+            dest=output_dir,
+        )
+    )
