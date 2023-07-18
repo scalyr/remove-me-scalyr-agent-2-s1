@@ -15,36 +15,23 @@
 
 import collections
 import datetime
-import io
-import json
 import random
-import shlex
-import socket
 import subprocess
-import sys
-import threading
 import pathlib as pl
 import time
-import traceback
 import logging
 from typing import List, Optional, Dict
 
-import boto3
 import botocore.exceptions
 import paramiko
 import requests
 
-from agent_build_refactored.tools.aws.common import COMMON_TAG_NAME, CURRENT_SESSION_TAG_NAME, AWSSettings
+from agent_build_refactored.tools.aws.common import COMMON_TAG_NAME, AWSSettings
 
 from agent_build_refactored.tools.docker.common import delete_container, get_docker_container_host_port
 from agent_build_refactored.tools.toolset_image import build_toolset_image
 
 logger = logging.getLogger(__name__)
-
-
-INSTANCE_NAME_STRING = "automated-agent-ci-cd"
-
-
 
 
 class EC2InstanceWrapper:
@@ -61,20 +48,7 @@ class EC2InstanceWrapper:
         self.private_key_path = private_key_path
         self.username = username
 
-        self._ssh_tunnel_containers: Dict[int, str] = {}
-
-        self._ssh_client_container_name = f"ec2_instance_{boto3_instance.id}_ssh_client"
-        self._ssh_client_container_host_port = f"ec2_instance_{boto3_instance.id}_ssh_client"
         self._ssh_client_container_in_docker_private_key_path = pl.Path("/tmp/mounts/private_key.pem")
-
-        #self.ssh_client_container_thread = threading.Thread(target=self.start_ssh_client_container)
-        #self.ssh_client_container_thread.start()
-
-        #self._ssh_container: Optional[ContainerWrapper] = self.start_ssh_client_container()
-
-        self.ssh_client_docker_image_name: Optional[str] = None
-
-        self._paramiko_ssh_connection: Optional[paramiko.SSHClient] = None
 
         self._ssh_container_names = []
         self._main_ssh_connection_container_name: Optional[str] = None
@@ -214,8 +188,6 @@ class EC2InstanceWrapper:
             container_name=container_name,
             container_port=full_local_port,
         )
-
-        self._ssh_tunnel_containers[host_port] = container_name
 
         return host_port
 
