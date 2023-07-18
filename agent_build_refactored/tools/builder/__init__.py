@@ -47,6 +47,9 @@ class Builder:
 
     @abc.abstractmethod
     def _build(self):
+        """
+        Main build procedure.
+        """
         pass
 
     def to_in_docker_path(self, path: pl.Path):

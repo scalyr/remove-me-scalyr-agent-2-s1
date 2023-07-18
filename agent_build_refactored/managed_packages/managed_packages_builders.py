@@ -85,19 +85,9 @@ The structure of the package has to guarantee that files of these packages does 
 """
 
 import abc
-import collections
-import concurrent.futures
-import dataclasses
-import functools
-import hashlib
-import json
 import logging
-import operator
 import os
-import shlex
 import shutil
-import subprocess
-import argparse
 import pathlib as pl
 import re
 from typing import List, Dict, Type, Union, Set
@@ -110,7 +100,6 @@ from agent_build_refactored.tools.constants import (
     CpuArch,
     REQUIREMENTS_AGENT_COMMON,
     REQUIREMENTS_AGENT_COMMON_PLATFORM_DEPENDENT,
-    CURRENT_MACHINE_CPU_ARCHITECTURE,
     AGENT_BUILD_OUTPUT_PATH,
 )
 
@@ -196,6 +185,7 @@ SUPPORTED_ARCHITECTURES = {
 
 
 def cpu_arch_as_fpm_arch(arch: CpuArch):
+    """Convert cpu architecture enum instance to a docker platform string."""
     if arch == CpuArch.x86_64:
         return "amd64"
 
@@ -279,10 +269,12 @@ class LinuxPackageBuilder(Builder):
 
     @property
     def _package_root(self):
+        """Intermediate directory with agent package root"""
         return self.work_dir / "agent_package_root"
 
     @abc.abstractmethod
     def _build_package_root(self):
+        """Build all files that has to be inside resulting packages."""
         pass
 
     @property
@@ -306,6 +298,9 @@ class LinuxPackageBuilder(Builder):
         self,
         package_type: str,
     ) -> List[str]:
+        """
+        Get list of command line arguments that are used to build resulting package.
+        """
         pass
 
     def _build_package(

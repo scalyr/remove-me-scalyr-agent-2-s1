@@ -24,13 +24,10 @@ to see all available packages to build use:
 Commands line arguments for the particular package builder are defined within the builder itself,
 to see those options use build_package_new.py <name of the package> --help.
 """
-import logging
-import pathlib as pl
 import argparse
 import sys
 import pathlib as pl
 
-from typing import Dict, Type
 
 if sys.version_info < (3, 8, 0):
     raise ValueError("This script requires Python 3.8 or above")
@@ -46,8 +43,6 @@ from agent_build_refactored.managed_packages.managed_packages_builders import (
 )
 
 init_logging()
-
-from agent_build_refactored.tools.builder import Builder
 
 
 if __name__ == "__main__":

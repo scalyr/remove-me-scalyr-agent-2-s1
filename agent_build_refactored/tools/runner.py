@@ -41,7 +41,7 @@ from agent_build_refactored.tools import (
     IN_DOCKER,
 )
 
-from agent_build_refactored.tools.aws.common import EC2DistroImage, AWSSettings
+from agent_build_refactored.tools.run_in_ec2.constants import EC2DistroImage
 
 logger = logging.getLogger(__name__)
 
@@ -1023,7 +1023,10 @@ class Runner:
             If step is not configured to run in remote docker engine, then return None.
             """
 
-            from agent_build_refactored.tools.aws.ec2 import create_and_deploy_ec2_instance
+            from agent_build_refactored.tools.run_in_ec2.boto3_tools import (
+                create_and_deploy_ec2_instance,
+                AWSSettings,
+            )
 
             if not step.github_actions_settings.run_in_remote_docker:
                 return None
@@ -1169,15 +1172,15 @@ class Runner:
 
 
 # Collection of EC2 AMI images that are used for creating instances with remote docker engine.
-# DOCKER_EC2_BUILDERS = {
-#     Architecture.ARM64: EC2DistroImage(
-#         image_id="ami-0e2b332e63c56bcb5",
-#         image_name="Ubuntu Server 22.04 LTS (HVM), SSD Volume Type",
-#         short_name="ubuntu2204_ARM",
-#         size_id="c7g.medium",
-#         ssh_username="ubuntu",
-#     )
-# }
+DOCKER_EC2_BUILDERS = {
+    Architecture.ARM64: EC2DistroImage(
+        image_id="ami-0e2b332e63c56bcb5",
+        image_name="Ubuntu Server 22.04 LTS (HVM), SSD Volume Type",
+        short_name="ubuntu2204_ARM",
+        size_id="c7g.medium",
+        ssh_username="ubuntu",
+    )
+}
 
 
 def run_docker_command(

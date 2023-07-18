@@ -14,13 +14,12 @@
 
 
 import abc
-import collections
 import dataclasses
 import hashlib
 import logging
 import time
 import pathlib as pl
-from typing import Dict, Optional, List, Any
+from typing import Dict, Optional
 
 from agent_build_refactored.tools.aws.common import COMMON_TAG_NAME, AWSSettings
 
@@ -32,6 +31,9 @@ _used_ami_images = []
 
 
 class AMIImage:
+    """
+    Class that represents AWS EC2 AMI image.
+    """
     def __init__(
         self,
         name: str,
@@ -100,6 +102,10 @@ class StockAMIImage(AMIImage):
 
 @dataclasses.dataclass
 class CustomAMIImage(AMIImage):
+    """
+    AWS EC2 images that can be build from the "base" existing AMI image with additional changes that
+    can be done by specifying a deployment script.
+    """
     base_image: AMIImage
     base_instance_size_id: str
     deployment_script: pl.Path = None,
@@ -120,6 +126,17 @@ class CustomAMIImage(AMIImage):
         ssh_username: str = None,
         short_name: str = None,
     ):
+        """
+
+        :param name: Name of image.
+        :param base_image: AMI image that is used as base.
+        :param base_instance_size_id: Size id for an intermediate instance that will be used to create an image.
+        :param deployment_script: Deployment script path.
+        :param base_instance_root_volume_size: Root volume for intermediate ec2 instance.
+        :param base_instance_additional_ec2_instances_tags: Additional tags for created instances.
+        :param ssh_username:
+        :param short_name:
+        """
         super(CustomAMIImage, self).__init__(
             name=name,
             ssh_username=ssh_username or base_image.ssh_username,
@@ -196,21 +213,6 @@ class CustomAMIImage(AMIImage):
         # Create new AMI image.
         name = f"{CICD_AMI_IMAGES_NAME_PREFIX}_{self.checksum}"
         logger.info(f"Create new ami image '{name}'")
-
-        from agent_build_refactored.tools.aws.ec2 import EC2InstanceWrapper
-
-        # base_instance = EC2InstanceWrapper.create_and_deploy_ec2_instance(
-        #     ec2_client=ec2_client,
-        #     ec2_resource=ec2_resource,
-        #     image_id=self.base_image.image_id,
-        #     size_id=self.base_instance_size_id,
-        #     ssh_username=self.base_image.ssh_username,
-        #     private_key_name=aws_settings.private_key_name,
-        #     private_key_path=aws_settings.private_key_path,
-        #     root_volume_size=self.base_instance_root_volume_size,
-        #     deployment_script=self.deployment_script,
-        #     additional_ec2_instances_tags=self.base_instance_additional_ec2_instances_tags,
-        # )
 
         base_instance = self.base_image.deploy_ec2_instance(
             size_id=self.base_instance_size_id,
