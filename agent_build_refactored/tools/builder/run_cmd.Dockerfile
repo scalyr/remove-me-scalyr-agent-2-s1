@@ -1,5 +1,4 @@
-#!/bin/sh
-# Copyright 2014-2021 Scalyr Inc.
+# Copyright 2014-2023 Scalyr Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,21 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script is used by Runner - agent_build/__init__.py.BuildTestEnvironment to install testing requirements.
+
+FROM base as build
+ARG COMMAND
+ARG ROOT_DIR
+COPY --from=root_dir / ${ROOT_DIR}
+ARG CWD="/"
+WORKDIR "${CWD}"
+SHELL ["/bin/bash", "-c"]
+RUN /bin/bash -c "$COMMAND"
 
 
-pip_cache_dir="$(python3 -m pip cache dir)"
-
-# Reuse cached pip cache if exists.
-restore_from_cache pip "$pip_cache_dir"
-
-REQUIREMENTS_PATH="$SOURCE_ROOT/agent_build/requirement-files"
-
-sh_cs python3 -m pip install -v -r "${REQUIREMENTS_PATH}/testing-requirements.txt"
-
-# Save pip cache to reuse it in future.
-save_to_cache pip "$pip_cache_dir"
-
-
-
-
+FROM scratch
+ARG OUTPUT_DIR
+COPY --from=build ${OUTPUT_DIR}/. /

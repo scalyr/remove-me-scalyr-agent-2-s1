@@ -1,0 +1,35 @@
+name: "Install Python and requirements"
+description: "Install Python interpreter and requirement libraries for the agent"
+
+inputs:
+  python_version:
+    description: "Version of Python"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ inputs.python_version }}
+
+    - name: Get cached venv
+      id: cache_venv
+      uses: actions/cache@v3
+      with:
+        path: venv
+        key: ${{ runner.os }}-requirements-venv-${{ hashFiles('dev-requirements-new.txt') }}-4
+
+    - name: Create venv
+      if: steps.cache_venv.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: |
+        python3 -m venv venv
+        venv/bin/python3 -m pip install -r dev-requirements-new.txt
+
+    - name: Add venv to PATH
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: |
+        echo "${{ github.workspace }}/venv/bin" >> "$GITHUB_PATH"
