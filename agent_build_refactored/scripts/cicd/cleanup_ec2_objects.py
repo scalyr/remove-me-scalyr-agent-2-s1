@@ -108,6 +108,7 @@ DELETE_OLD_AMI_IMAGES_THRESHOLD_DT = datetime.utcnow() - DELETE_OLD_AMI_IMAGES_T
 def cleanup_old_ec2_instances_and_related_objects(
     ec2_client,
     ec2_resource,
+    current_workflow_string: str = None
 ):
     """
     Cleanup old ec2 instances.
@@ -146,11 +147,19 @@ def cleanup_old_ec2_instances_and_related_objects(
         if not instance.launch_time:
             continue
 
+        tags = {tag["Key"]: tag["Value"] for tag in instance.tags}
+
+        cicd_workflow_tag = tags.get("cicd_workflow")
+
+        if aws_settings.cicd_workflow:
+            if cicd_workflow_tag and cicd_workflow_tag == aws_settings.cicd_workflow:
+                instances_to_remove.append(instance)
+                continue
+
         tzinfo = instance.launch_time.tzinfo
         if instance.launch_time >= DELETE_OLD_NODES_THRESHOLD_DT.replace(tzinfo=tzinfo):
             continue
 
-        logger.info(f"Remove ec2 instance {instance.id}")
         instances_to_remove.append(instance)
 
     terminate_ec2_instances_and_security_groups(
@@ -180,7 +189,7 @@ def cleanup_old_volumes(
         if volume.create_time >= DELETE_OLD_NODES_THRESHOLD_DT.replace(tzinfo=tzinfo):
             continue
 
-        logger.info(f"Deleting volume with name: {volume.name}")
+        logger.info(f"Deleting volume with name: {volume.id}")
         volume.remove()
 
 

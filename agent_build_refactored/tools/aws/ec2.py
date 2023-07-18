@@ -74,10 +74,6 @@ class EC2InstanceWrapper:
 
         self.ssh_client_docker_image_name: Optional[str] = None
 
-        # self._ssh_containers: List[ContainerWrapper] = []
-        #
-        # self._ssh_container = self.start_ssh_client_container()
-
         self._paramiko_ssh_connection: Optional[paramiko.SSHClient] = None
 
         self._ssh_container_names = []
@@ -192,7 +188,6 @@ class EC2InstanceWrapper:
                 logger.info("    SSH connection has been established.")
                 break
 
-
     def open_ssh_tunnel(
         self,
         remote_port: int,
@@ -202,23 +197,6 @@ class EC2InstanceWrapper:
 
         local_port = local_port or remote_port
         full_local_port = f"{local_port}/tcp"
-
-        # container = ContainerWrapper(
-        #     name=f"{self.id}_{local_port}-{remote_port}",
-        #     image=ssh_client_docker_image_name,
-        #     rm=False,
-        #     ports={0: full_local_port},
-        #     volumes={self.private_key_path: self._ssh_client_container_in_docker_private_key_path},
-        #     command_args=[
-        #         "ssh",
-        #         *self._common_ssh_options,
-        #         "-N",
-        #         "-L",
-        #         f"0.0.0.0:{local_port}:localhost:{remote_port}",
-        #     ]
-        # )
-        #
-        # container.run(interactive=False)
 
         container_name = self._create_ssh_container(
             name_suffix=f"tunnel_port_{local_port}",
@@ -240,7 +218,6 @@ class EC2InstanceWrapper:
         self._ssh_tunnel_containers[host_port] = container_name
 
         return host_port
-
 
     def ssh_put_files(self, src: pl.Path, dest: pl.Path):
         """
@@ -309,19 +286,6 @@ class EC2InstanceWrapper:
             check=True,
         )
 
-        a=10
-        # sftp = self.paramiko_ssh_connection.open_sftp()
-        # try:
-        #     for src, dst in files.items():
-        #         logger.info(f"SSH put file {src} to {dst}")
-        #         sftp.put(str(src), str(dst))
-        #
-        #         # also set file permissions, since it seems that they are not preserved.
-        #         mode = pl.Path(src).stat().st_mode
-        #         sftp.chmod(str(dst), mode)
-        # finally:
-        #     sftp.close()
-
     def terminate(self):
 
         for container_name in self._ssh_container_names:
@@ -349,14 +313,15 @@ class EC2InstanceWrapper:
     ):
         """
         Create AWS EC2 instance and additional deploy files or scripts.
-        :param boto3_session: Boto3 session.
-        :param ec2_image: AMI image which is used to start instance.
-        :param name_prefix: Additional name prefix for instance.
+        :param ec2_client: boto3 ec2 client.
+        :param ec2_resource: boto3 ec2 resource instance.
+        :param image_id: Id of the  AWS AMI image.
+        :param size_id: Size ID for the new instance.
+        :param ssh_username: Username to use within the instance3.
         :param aws_settings: All required AWS settings and credentials.
         :param root_volume_size: Size of root volume on GB
-        :param files_to_upload:
-        :param deployment_script:
-        :return:
+        :param files_to_upload: Additional files to upload during the deployment.
+        :param deployment_script: Path to a script to run after instance is created.
         """
 
         name = f"cicd(disposable)-dataset-agent-{aws_settings.cicd_workflow}"
@@ -386,9 +351,8 @@ class EC2InstanceWrapper:
         security_group_id = resp["GroupId"]
 
         ip_address = _get_current_ip_address()
-        #ip_address = "87.116.167.196"
-        #ip_address = "87.116.180.68"
 
+        # Create new security group for new instance.
         ec2_client.authorize_security_group_ingress(
             GroupId=security_group_id,
             IpPermissions=[
@@ -408,7 +372,7 @@ class EC2InstanceWrapper:
 
         if aws_settings.cicd_workflow:
             additional_tags = {
-                aws_settings.cicd_workflow: ""
+                "cicd_workflow": aws_settings.cicd_workflow
             }
         else:
             additional_tags = None
@@ -481,6 +445,14 @@ def _create_ec2_instance(
 ):
     """
     Create AWS EC2 instance.
+    :param ec2_resource: boto3 ec2 resource instance.
+    :param image_id: Id of the  AWS AMI image.
+    :param size_id: Size ID for the new instance.
+    :param instance_name: Name of the new instance.
+    :param security_group_id: ID of the security group to use with new instance.
+    :param private_key_name: Name of the AWS EC2 private key to use with new instance.
+    :param root_volume_size: Size of root volume on GB
+    :param additional_tags: Additional tags to apply to new instance.
     """
 
     additional_tags = additional_tags or {}
@@ -611,6 +583,7 @@ def terminate_ec2_instances_and_security_groups(
                 security_group["GroupId"]
             )
 
+        logger.info(f"Terminate ec2 instance {instance.id}")
         instance.terminate()
 
     for instance in instances:
