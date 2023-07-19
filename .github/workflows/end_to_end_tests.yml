@@ -23,6 +23,18 @@ on:
         description: "Additional string that has to differentiate AWS object from another workflows."
         type: string
 
+    secrets:
+      CT_AWS_DEV_EC2_PRIVATE_KEY:
+        required: true
+      CT_AWS_DEV_EC2_ACCESS_KEY:
+        required: true
+      CT_AWS_DEV_EC2_SECRET_KEY:
+        required: true
+      CT_SCALYR_TOKEN_PROD_US_CLOUDTECH_TESTING_WRITE:
+        required: true
+      CT_SCALYR_TOKEN_PROD_US_CLOUDTECH_TESTING_READ:
+        required: true
+
 
 jobs:
 #  build_and_cache_image_requirements:
