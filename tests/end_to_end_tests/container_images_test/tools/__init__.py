@@ -39,40 +39,44 @@ def build_test_version_of_container_image(
         ],
         check=True
     )
-
-    all_image_tags = image_builder.generate_final_registry_tags(
-        registry="localhost:5000",
-        user="user",
-        tags=["prod"],
-    )
-
-    image_builder.publish(
-        tags=all_image_tags,
-        existing_oci_layout_dir=ready_image_oci_tarball
-    )
-
-    prod_image_tag = all_image_tags[0]
-
-    dirr = pl.Path("/Users/arthur/PycharmProjects/scalyr-agent-2-final/agent_build_output/ffffffff")
-    image_builder_cls.build_dependencies(
-        output_dir=dirr,
-    )
-
-    buildx_build(
-        dockerfile_path=_PARENT_DIR / "Dockerfile",
-        context_path=_PARENT_DIR,
-        architecture=SUPPORTED_ARCHITECTURES[:],
-        build_args={
-            "REQUIREMENTS_FILE_CONTENT": REQUIREMENTS_DEV_COVERAGE,
-        },
-        build_contexts={
-            "prod_image": f"docker-image://{prod_image_tag}",
-            "dependencies": str(dirr),
-        },
-        output=DockerImageBuildOutput(
-            name=result_image_name,
+    try:
+        all_image_tags = image_builder.generate_final_registry_tags(
+            registry="localhost:5000",
+            user="user",
+            tags=["prod"],
         )
-    )
+
+        image_builder.publish(
+            tags=all_image_tags,
+            existing_oci_layout_dir=ready_image_oci_tarball
+        )
+
+        prod_image_tag = all_image_tags[0]
+
+        dirr = pl.Path("/Users/arthur/PycharmProjects/scalyr-agent-2-final/agent_build_output/ffffffff")
+        image_builder_cls.build_dependencies(
+            output_dir=dirr,
+        )
+
+        buildx_build(
+            dockerfile_path=_PARENT_DIR / "Dockerfile",
+            context_path=_PARENT_DIR,
+            architecture=SUPPORTED_ARCHITECTURES[:],
+            build_args={
+                "REQUIREMENTS_FILE_CONTENT": REQUIREMENTS_DEV_COVERAGE,
+            },
+            build_contexts={
+                "prod_image": f"docker-image://{prod_image_tag}",
+                "dependencies": str(dirr),
+            },
+            output=DockerImageBuildOutput(
+                name=result_image_name,
+            )
+        )
+    finally:
+        delete_container(
+            container_name=registry_container_name
+        )
 
     return result_image_name
 
