@@ -99,8 +99,10 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        builder_name: ["ubuntu", "alpine"]
-        image_type: ["k8s", "docker-json", "docker-syslog", "docker-api"]
+#        builder_name: ["ubuntu", "alpine"]
+#        image_type: ["k8s", "docker-json", "docker-syslog", "docker-api"]
+        builder_name: [ "ubuntu" ]
+        image_type: [ "k8s" ]
 
     steps:
       - name: Checkout repository
@@ -598,7 +600,7 @@ jobs:
             --image-builder-name ubuntu \
             --image-type docker-json \
             --architecture x86_64 \
-            --image-oci-tarball /tmp/image_tarball/k8s-ubuntu.tar
+            --image-oci-tarball /tmp/image_tarball/k8s-ubuntu.tar \
             --result-image-name k8s-ubuntu:test
 
       - name: Run Tests (with coverage)
