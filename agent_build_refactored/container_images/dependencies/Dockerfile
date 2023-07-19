@@ -14,7 +14,7 @@ RUN apt-get install -y \
 RUN python3 -m pip install --upgrade setuptools pip --root /tmp/requrements_root
 RUN cp -a /tmp/requrements_root/. /
 
-FROM python:3.8.16 as base_alpine
+FROM python:3.8.16-alpine as base_alpine
 RUN apk update && apk add --virtual build-dependencies \
     binutils \
     build-base \
