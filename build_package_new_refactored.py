@@ -160,11 +160,14 @@ if __name__ == "__main__":
                 existing_oci_layout_dir = pl.Path(args.from_oci_layout_dir)
             else:
                 existing_oci_layout_dir = None
-
-            builder.publish(
+            
+            final_tags = builder.generate_final_registry_tags(
                 registry=args.registry,
                 user=args.user,
-                tags=tags,
+                tags=tags
+            )
+            builder.publish(
+                tags=final_tags,
                 existing_oci_layout_dir=existing_oci_layout_dir
             )
             exit(0)

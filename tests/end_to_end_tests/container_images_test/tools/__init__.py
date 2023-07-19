@@ -21,35 +21,24 @@ def build_test_version_of_container_image(
         image_type=image_type,
     )
 
-    container_name = "agent_image_e2e_test_registry"
+    registry_container_name = "agent_image_e2e_test_registry"
 
     delete_container(
-        container_name=container_name
+        container_name=registry_container_name
     )
 
-    # subprocess.run(
-    #     [
-    #         "docker",
-    #         "run",
-    #         "-d",
-    #         "--rm",
-    #         "-p=5000:5000",
-    #         f"--name={container_name}",
-    #         "registry:2",
-    #     ],
-    #     check=True
-    # )
-
-    # image_name_parts = result_image_name.split(":")
-    #
-    # if len(image_name_parts) == 1:
-    #     image_name = image_name_parts[0]
-    #     image_tag = "test"
-    # elif len(image_name_parts) == 2:
-    #     image_name = image_name_parts[0]
-    #     image_tag = image_name_parts[1]
-    # else:
-    #     raise Exception("Unexpected number of mage name parts.")
+    subprocess.run(
+        [
+            "docker",
+            "run",
+            "-d",
+            "--rm",
+            "-p=5000:5000",
+            f"--name={registry_container_name}",
+            "registry:2",
+        ],
+        check=True
+    )
 
     all_image_tags = image_builder.generate_final_registry_tags(
         registry="localhost:5000",

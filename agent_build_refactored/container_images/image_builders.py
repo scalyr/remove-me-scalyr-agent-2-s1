@@ -129,27 +129,6 @@ class ContainerisedAgentBuilder(Builder):
         return result_names
 
     def _build(self):
-        #dependencies_dir = self.work_dir / "dependencies"
-        # for arch in SUPPORTED_ARCHITECTURES:
-        #     arch_dir = dependencies_dir / arch.value
-        #     build_agent_image_dependencies(
-        #         base_distro=self.__class__.BASE_DISTRO,
-        #         architecture=arch,
-        #         output_dir=arch_dir,
-        #     )
-
-        # if not self.build_only_dependencies:
-        #     dependencies_image_output = LocalDirectoryBuildOutput(
-        #         dest=self.dependencies_dir,
-        #     )
-        # else:
-        #     dependencies_image_output = None
-
-        # build_agent_image_dependencies(
-        #     base_distro=self.__class__.BASE_DISTRO,
-        #     architectures=architectures,
-        #     output=dependencies_image_output,
-        # )
 
         if self.only_cache_dependency_arch:
             dependency_architectures = [self.only_cache_dependency_arch]
@@ -162,23 +141,6 @@ class ContainerisedAgentBuilder(Builder):
             architectures=dependency_architectures,
             output_dir=output_dir,
         )
-
-        # for arch in architectures:
-        #     if not self.only_cache_dependency_arch:
-        #         build_target_name = _arch_to_docker_build_target_folder(arch)
-        #         arch_dir = self.dependencies_dir / build_target_name
-        #         output_dir = arch_dir
-        #     else:
-        #         output_dir = None
-        #
-        #     build_agent_image_dependencies(
-        #         base_distro=self.__class__.BASE_DISTRO,
-        #         architecture=arch,
-        #         output_dir=output_dir,
-        #     )
-        # self._build_dependencies(
-        #     architectures=architectures
-        # )
 
         if self.only_cache_dependency_arch:
             return
@@ -252,14 +214,6 @@ class ContainerisedAgentBuilder(Builder):
                 "--dest-tls-verify=false",
             ])
 
-        # final_names = []
-        #
-        # for image_name in _IMAGE_REGISTRY_NAMES[self.image_type]:
-        #     for tag in tags:
-        #         for tag_suffix in self.__class__.TAG_SUFFIXES:
-        #             final_name = f"{registry}/{user}/{image_name}:{tag}{tag_suffix}"
-        #             final_names.append(final_name)
-
         delete_container(
             container_name=container_name,
         )
@@ -271,11 +225,6 @@ class ContainerisedAgentBuilder(Builder):
                     *cmd_args,
                     "oci-archive:/tmp/oci_layout.tar",
                     f"docker://{tag}",
-
-
-
-                    # "docker://docker.io/ubuntu:22.04",
-                    # "dir:/tmp/oci_layout/ggg",
                 ],
                 check=True,
 
