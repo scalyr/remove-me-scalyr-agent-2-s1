@@ -636,7 +636,7 @@ jobs:
           channel: '#eng-dataset-cloud-tech'
 
   docker-smoketest:
-    name: Docker Smoketest - ${{ matrix.variant.log_mode }}
+    name: Docker Smoketest - ${{ matrix.variant.image_type }}
     needs:
       - build_image
     # NOTE: We always want to run job on master branch
@@ -648,9 +648,9 @@ jobs:
         variant:
           - image_type: docker-json
             timeout: 150
-          - log_mode: docker-syslog
+          - image_type: docker-syslog
             timeout: 150
-          - log_mode: docker-api
+          - image_type: docker-api
             timeout: 200
     steps:
       - name: Checkout Repository
@@ -704,12 +704,12 @@ jobs:
           SCALYR_API_KEY: ${{ secrets.CT_SCALYR_TOKEN_PROD_US_CLOUDTECH_TESTING_WRITE }}
           READ_API_KEY: ${{ secrets.CT_SCALYR_TOKEN_PROD_US_CLOUDTECH_TESTING_READ }}
         run: |
-          source ./.circleci/smoketest_docker.sh scalyr/scalyr-agent-ci-unittest:4 docker-${{ matrix.variant.log_mode }} ${{ matrix.variant.timeout }}
+          source ./.circleci/smoketest_docker.sh scalyr/scalyr-agent-ci-unittest:4 ${{ matrix.variant.image_type }} ${{ matrix.variant.timeout }} ${{ matrix.variant.image_type }}-ubuntu:test
 
       - name: Upload test results
         uses: actions/upload-artifact@v3
         with:
-          name: docker-smoketest-${{ matrix.variant.log_mode }}
+          name: docker-smoketest-${{ matrix.variant.image_type }}
           path: |
             .coverage
         if: ${{ success() || failure() }}
