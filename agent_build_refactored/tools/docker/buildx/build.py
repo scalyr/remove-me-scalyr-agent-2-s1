@@ -133,14 +133,16 @@ def buildx_build(
     if cache_name:
         if USE_GHA_CACHE:
             final_cache_scope = _get_gha_cache_scope(name=cache_name)
-            cmd_args.append(
+            cmd_args.extend([
                 f"--cache-from=type=gha,scope={final_cache_scope}",
-            )
+                f"--cache-to=type=gha,scope={final_cache_scope}",
+            ])
         else:
             cache_dir = _get_local_cache_dir(name=cache_name)
-            cmd_args.append(
+            cmd_args.extend([
                 f"--cache-from=type=local,src={cache_dir}",
-            )
+                f"--cache-to=type=local,dest={cache_dir}",
+            ])
 
     if output:
         cmd_args.append(

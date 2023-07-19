@@ -2,7 +2,7 @@ import pathlib as pl
 import subprocess
 from typing import Type
 
-from agent_build_refactored.tools.constants import REQUIREMENTS_DEV_COVERAGE
+from agent_build_refactored.tools.constants import REQUIREMENTS_DEV_COVERAGE, AGENT_BUILD_OUTPUT_PATH
 from agent_build_refactored.tools.docker.common import delete_container
 from agent_build_refactored.tools.docker.buildx.build import buildx_build, DockerImageBuildOutput
 from agent_build_refactored.container_images.image_builders import ALL_CONTAINERISED_AGENT_BUILDERS, ImageType, ContainerisedAgentBuilder, SUPPORTED_ARCHITECTURES
@@ -53,9 +53,10 @@ def build_test_version_of_container_image(
 
         prod_image_tag = all_image_tags[0]
 
-        dirr = pl.Path("/Users/arthur/PycharmProjects/scalyr-agent-2-final/agent_build_output/ffffffff")
+        test_dependencies_dir = AGENT_BUILD_OUTPUT_PATH / "container_image_e2e_test_dependencies"
+
         image_builder_cls.build_dependencies(
-            output_dir=dirr,
+            output_dir=test_dependencies_dir,
         )
 
         buildx_build(
@@ -67,7 +68,7 @@ def build_test_version_of_container_image(
             },
             build_contexts={
                 "prod_image": f"docker-image://{prod_image_tag}",
-                "dependencies": str(dirr),
+                "dependencies": str(test_dependencies_dir),
             },
             output=DockerImageBuildOutput(
                 name=result_image_name,
