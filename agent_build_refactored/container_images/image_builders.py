@@ -152,6 +152,8 @@ class ContainerisedAgentBuilder(Builder):
         build_linux_fhs_agent_files(
             output_path=agent_filesystem_dir,
         )
+        # Need to create some docker specific directories.
+        pl.Path(agent_filesystem_dir / "var/log/scalyr-agent-2/containers").mkdir()
 
         # Add config file
         config_name = self.image_type.value
