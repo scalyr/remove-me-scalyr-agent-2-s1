@@ -17,13 +17,16 @@ from tests.end_to_end_tests.container_images_test.tools import (
 init_logging()
 
 
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     add_command_line_args(
         parser=parser,
         add_func=parser.add_argument,
+    )
+
+    parser.add_argument(
+        "--result-image-name",
+        required=True,
     )
 
     args = parser.parse_args()
@@ -33,5 +36,6 @@ if __name__ == '__main__':
     build_test_version_of_container_image(
         image_builder_cls=image_builder_cls,
         image_type=ImageType(args.image_type),
+        result_image_name=args.result_image_name,
         ready_image_oci_tarball=args.image_oci_tarball,
     )

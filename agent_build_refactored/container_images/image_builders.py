@@ -83,7 +83,7 @@ class ContainerisedAgentBuilder(Builder):
 
     @property
     def result_oci_layout_tarball_path(self) -> pl.Path:
-        return self.result_dir / f"{self.__class__.NAME}.tar"
+        return self.result_dir / f"{self.image_type.value}-{self.__class__.NAME}.tar"
 
     @property
     def dependencies_dir(self) -> pl.Path:
@@ -259,7 +259,6 @@ class ContainerisedAgentBuilder(Builder):
         #         for tag_suffix in self.__class__.TAG_SUFFIXES:
         #             final_name = f"{registry}/{user}/{image_name}:{tag}{tag_suffix}"
         #             final_names.append(final_name)
-
 
         delete_container(
             container_name=container_name,

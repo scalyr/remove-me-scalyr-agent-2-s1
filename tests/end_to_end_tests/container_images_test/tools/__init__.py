@@ -13,6 +13,7 @@ _PARENT_DIR = pl.Path(__file__).parent
 def build_test_version_of_container_image(
     image_builder_cls: Type[ContainerisedAgentBuilder],
     image_type: ImageType,
+    result_image_name: str,
     ready_image_oci_tarball: pl.Path = None,
 ):
 
@@ -39,10 +40,21 @@ def build_test_version_of_container_image(
     #     check=True
     # )
 
+    # image_name_parts = result_image_name.split(":")
+    #
+    # if len(image_name_parts) == 1:
+    #     image_name = image_name_parts[0]
+    #     image_tag = "test"
+    # elif len(image_name_parts) == 2:
+    #     image_name = image_name_parts[0]
+    #     image_tag = image_name_parts[1]
+    # else:
+    #     raise Exception("Unexpected number of mage name parts.")
+
     all_image_tags = image_builder.generate_final_registry_tags(
         registry="localhost:5000",
         user="user",
-        tags=["test"],
+        tags=["prod"],
     )
 
     image_builder.publish(
@@ -56,7 +68,6 @@ def build_test_version_of_container_image(
     image_builder_cls.build_dependencies(
         output_dir=dirr,
     )
-    image_name = "test_version"
 
     buildx_build(
         dockerfile_path=_PARENT_DIR / "Dockerfile",
@@ -70,11 +81,11 @@ def build_test_version_of_container_image(
             "dependencies": str(dirr),
         },
         output=DockerImageBuildOutput(
-            name=image_name,
+            name=result_image_name,
         )
     )
 
-    return image_name
+    return result_image_name
 
 
 def get_image_builder_by_name(name: str):
