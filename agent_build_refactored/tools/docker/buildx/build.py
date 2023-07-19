@@ -24,7 +24,7 @@ import pathlib as pl
 import subprocess
 import tarfile
 import time
-from typing import List, Dict
+from typing import List, Dict, Union
 
 
 from agent_build_refactored.tools.constants import AGENT_BUILD_OUTPUT_PATH, CpuArch
@@ -76,7 +76,10 @@ class OCITarballBuildOutput(BuildOutput):
 
     @property
     def tarball_path(self):
-        return f"{self.dest}.tar"
+        if self.extract:
+            return self.dest.parent / f"{self.dest.name}.tar"
+        else:
+            return self.dest
 
     def to_docker_output_option(self):
         return f"type=oci,dest={self.tarball_path}"
@@ -85,7 +88,7 @@ class OCITarballBuildOutput(BuildOutput):
 def buildx_build(
         dockerfile_path: pl.Path,
         context_path: pl.Path,
-        architecture: CpuArch,
+        architecture: Union[CpuArch, List[CpuArch]],
         build_args: Dict[str, str] = None,
         build_contexts: Dict[str, str] = None,
         output: BuildOutput = None,
@@ -102,9 +105,20 @@ def buildx_build(
         "buildx",
         "build",
         f"-f={dockerfile_path}",
-        f"--platform={architecture.as_docker_platform()}",
         "--progress=plain",
     ]
+
+    used_architectures = []
+    if isinstance(architecture, list):
+        for arch in architecture:
+            used_architectures.append(arch)
+    else:
+        used_architectures.append(architecture)
+
+    for arch in used_architectures:
+        cmd_args.append(
+            f"--platform={arch.as_docker_platform()}",
+        )
 
     for name, value in build_args.items():
         cmd_args.append(
@@ -147,7 +161,7 @@ def buildx_build(
             # Give more time if we build inside GitHub Action, because its cache may be pretty slow.
             fallback_timeout = 60 * 2
         else:
-            fallback_timeout = 60
+            fallback_timeout = 40
             #fallback_timeout = 5
 
         logger.info(

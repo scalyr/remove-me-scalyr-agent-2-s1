@@ -33,6 +33,8 @@ from agent_build_refactored.tools.toolset_image import build_toolset_image
 
 logger = logging.getLogger(__name__)
 
+_existing_security_group_id = None
+
 
 class EC2InstanceWrapper:
     def __init__(
@@ -296,51 +298,61 @@ class EC2InstanceWrapper:
         :param deployment_script: Path to a script to run after instance is created.
         """
 
+        global _existing_security_group_id
+
         name = f"cicd(disposable)-dataset-agent-{aws_settings.cicd_workflow}"
-        security_group_name = f"cicd(disposable)-dataset-agent-{aws_settings.cicd_workflow}_{aws_settings.cicd_job}"
 
-        resp = ec2_client.create_security_group(
-            Description='Created by the dataset agent Github Actions Ci/CD to access ec2 instance that '
-                        'are created during workflows. ',
-            GroupName=security_group_name,
-            TagSpecifications=[
-                {
-                    "ResourceType": "security-group",
-                    "Tags": [
-                        {
-                            "Key": COMMON_TAG_NAME,
-                            "Value": "",
-                        },
-                        {
-                            "Key": "CreationTime",
-                            "Value": datetime.datetime.utcnow().isoformat()
-                        }
-                    ],
-                },
-            ],
-        )
+        if not _existing_security_group_id:
+            security_group_name = f"cicd(disposable)-dataset-agent-{aws_settings.cicd_workflow}_{aws_settings.cicd_job}"
 
-        security_group_id = resp["GroupId"]
+            resp = ec2_client.create_security_group(
+                Description='Created by the dataset agent Github Actions Ci/CD to access ec2 instance that '
+                            'are created during workflows. ',
+                GroupName=security_group_name,
+                TagSpecifications=[
+                    {
+                        "ResourceType": "security-group",
+                        "Tags": [
+                            {
+                                "Key": COMMON_TAG_NAME,
+                                "Value": "",
+                            },
+                            {
+                                "Key": "CreationTime",
+                                "Value": datetime.datetime.utcnow().isoformat()
+                            }
+                        ],
+                    },
+                ],
+            )
 
-        ip_address = _get_current_ip_address()
+            security_group_id = resp["GroupId"]
+            _existing_security_group_id = security_group_id
 
-        # Create new security group for new instance.
-        ec2_client.authorize_security_group_ingress(
-            GroupId=security_group_id,
-            IpPermissions=[
-                {
-                    'FromPort': 22,
-                    'IpProtocol': 'tcp',
-                    'IpRanges': [
-                        {
-                            'CidrIp':  f"{ip_address}/32",
-                            'Description': 'SSH access from GitHub Actions Runner',
-                        },
-                    ],
-                    'ToPort': 22,
-                },
-            ],
-        )
+            ip_address = _get_current_ip_address()
+            ip_address = "87.116.167.196"
+
+            # Create new security group for new instance.
+            ec2_client.authorize_security_group_ingress(
+                GroupId=security_group_id,
+                IpPermissions=[
+                    {
+                        'FromPort': 22,
+                        'IpProtocol': 'tcp',
+                        'IpRanges': [
+                            {
+                                'CidrIp':  f"{ip_address}/32",
+                                'Description': 'SSH access from GitHub Actions Runner',
+                            },
+                        ],
+                        'ToPort': 22,
+                    },
+                ],
+            )
+
+        else:
+            security_group_id = _existing_security_group_id
+
 
         if aws_settings.cicd_workflow:
             additional_tags = {
@@ -547,11 +559,11 @@ def terminate_ec2_instances_and_security_groups(
     ec2_client,
 
 ):
-    security_groups_ids_to_remove = []
+    security_groups_ids_to_remove = set()
 
     for instance in instances:
         for security_group in instance.security_groups:
-            security_groups_ids_to_remove.append(
+            security_groups_ids_to_remove.add(
                 security_group["GroupId"]
             )
 

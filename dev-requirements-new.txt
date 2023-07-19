@@ -41,8 +41,12 @@ lz4==4.0.2
 # <COMPONENT:BUILD>
 PyInstaller==5.6.2
 
+
 # Dev and testing requirements.
-# <COMPONENT:DEV>
+# <COMPONENT:DEV_COVERAGE>
+coverage==4.5.4
+
+# <COMPONENT:DEV_COMMON>
 # Testing tools and libraries
 boto3==1.26.17
 mock==3.0.5
@@ -53,7 +57,6 @@ requests_mock==1.9.3
 pygal==3.0.0
 pytest-benchmark==4.0.0
 pytest-xdist==1.31.0
-coverage==4.5.4
 decorator==4.4.1
 requests-mock==1.9.3
 docker==6.0.0

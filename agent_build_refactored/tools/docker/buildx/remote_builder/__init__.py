@@ -130,6 +130,7 @@ class EC2BackedRemoteBuildxBuilderWrapper:
         # )
 
     def start_buildkit_container(self):
+
         base_ec2_image = REMOTE_DOCKER_ENGINE_IMAGES[self.architecture]
 
         aws_settings = AWSSettings.create_from_env()
@@ -231,7 +232,12 @@ def get_remote_builder(
 ):
     global _existing_remote_builders
 
-    builder = _existing_remote_builders.get(architecture)
+    if architecture == CpuArch.ARMV7:
+        builder_architecture = CpuArch.AARCH64
+    else:
+        builder_architecture = architecture
+
+    builder = _existing_remote_builders.get(builder_architecture)
 
     if builder:
         return builder
@@ -241,14 +247,14 @@ def get_remote_builder(
     toolset_image_name = build_toolset_image()
 
     builder = EC2BackedRemoteBuildxBuilderWrapper(
-        name=f"agent_build_ec2_backed_remote_builder_{architecture.value}",
-        architecture=architecture,
+        name=f"agent_build_ec2_backed_remote_builder_{builder_architecture.value}",
+        architecture=builder_architecture,
         ssh_client_image_name=toolset_image_name
     )
 
     builder.initialize()
 
-    _existing_remote_builders[architecture] = builder
+    _existing_remote_builders[builder_architecture] = builder
     return builder
 
 
