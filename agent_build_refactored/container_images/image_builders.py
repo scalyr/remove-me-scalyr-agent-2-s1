@@ -18,7 +18,7 @@ from agent_build_refactored.prepare_agent_filesystem import build_linux_fhs_agen
 
 SUPPORTED_ARCHITECTURES = [
     CpuArch.x86_64,
-    CpuArch.AARCH64,
+    #CpuArch.AARCH64,
     #CpuArch.ARMV7,
 ]
 

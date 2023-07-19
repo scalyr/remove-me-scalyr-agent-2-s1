@@ -1,2 +1,2 @@
-def test_d(image_oci_tarball):
+def test_d(image_test_version):
     pass
