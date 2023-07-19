@@ -224,7 +224,7 @@ jobs:
       - name: Download OCI tarball of the build image.
         uses: actions/download-artifact@v3
         with:
-          name: container-image-tarball-${{ matrix.variant.image_type }}-ubuntu
+          name: container-image-tarball-k8s-ubuntu
           path: /tmp/image_tarball
 
       - name: Expose GitHub Runtime To Be Able to Use GHA Cache By Docker.
@@ -239,7 +239,7 @@ jobs:
             --image-builder-name ubuntu \
             --image-type k8s \
             --architecture x86_64 \
-            --image-oci-tarball /tmp/image_tarball/$k8s-ubuntu.tar \
+            --image-oci-tarball /tmp/image_tarball/k8s-ubuntu.tar \
             --result-image-name k8s-ubuntu:test
           
           docker image ls
@@ -460,7 +460,7 @@ jobs:
       - name: Download OCI tarball of the build image.
         uses: actions/download-artifact@v3
         with:
-          name: container-image-tarball-${{ matrix.variant.image_type }}-ubuntu
+          name: container-image-tarball-k8s-ubuntu
           path: /tmp/image_tarball
 
       - name: Expose GitHub Runtime To Be Able to Use GHA Cache By Docker.
@@ -475,7 +475,7 @@ jobs:
             --image-builder-name ubuntu \
             --image-type k8s \
             --architecture x86_64 \
-            --image-oci-tarball /tmp/image_tarball/$k8s-ubuntu.tar \
+            --image-oci-tarball /tmp/image_tarball/k8s-ubuntu.tar \
             --result-image-name k8s-ubuntu:test
           
           docker image ls
@@ -783,7 +783,7 @@ jobs:
     if: success() || failure()
     needs:
       - k8s-smoketest
-      #- docker-smoketest
+      - docker-smoketest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
