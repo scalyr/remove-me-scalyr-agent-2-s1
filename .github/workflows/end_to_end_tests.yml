@@ -601,7 +601,6 @@ jobs:
       - name: Build test image
         env:
           USE_GHA_CACHE: "1"
-          ALLOW_FALLBACK_TO_REMOTE_BUILDER: "1"
           CACHE_VERSION: ${{ inputs.cache_version }}
         run: |
           python3 tests/end_to_end_tests/container_images_test/scripts/build_test_image.py \
