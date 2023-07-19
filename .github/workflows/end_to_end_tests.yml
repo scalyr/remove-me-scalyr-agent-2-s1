@@ -99,10 +99,8 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-#        builder_name: ["ubuntu", "alpine"]
-#        image_type: ["k8s", "docker-json", "docker-syslog", "docker-api"]
-        builder_name: [ "ubuntu" ]
-        image_type: [ "k8s" ]
+        builder_name: ["ubuntu", "alpine"]
+        image_type: ["k8s", "docker-json", "docker-syslog", "docker-api"]
 
     steps:
       - name: Checkout repository
