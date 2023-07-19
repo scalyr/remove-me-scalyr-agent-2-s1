@@ -95,7 +95,7 @@ jobs:
 #            --architecture=${{ matrix.architecture }}
 
   build_image:
-    name: Build package ${{ matrix.builder.name }}
+    name: Build package ${{ matrix.builder_name }}-${{ matrix.image_type }}
     runs-on: ubuntu-22.04
     strategy:
       matrix:
