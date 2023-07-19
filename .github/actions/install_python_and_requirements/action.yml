@@ -18,7 +18,7 @@ runs:
       uses: actions/cache@v3
       with:
         path: venv
-        key: ${{ runner.os }}-requirements-venv-${{ hashFiles('dev-requirements-new.txt') }}-4
+        key: ${{ runner.os }}-requirements-venv-${{ hashFiles('dev-requirements-new.txt') }}-5
 
     - name: Create venv
       if: steps.cache_venv.outputs.cache-hit != 'true'
