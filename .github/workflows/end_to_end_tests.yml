@@ -1,82 +1,150 @@
 name: "Kubernetes End to End Tests"
 
 on:
-  push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - master
-  schedule:
-    - cron: '0 4 * * *'
+  workflow_call:
+    inputs:
+      python_version:
+        description: "Version of Python to use."
+        type: string
 
-permissions:
-  actions: write  # Needed for skip-duplicate-jobs job
-  contents: read
+      cache_version:
+        description: "Version suffix for the cache key. May be useful when it is needed to invalidate the cache."
+        type: string
+
+      aws_region:
+        description: "AWS region for remote builds."
+        type: string
+
+      aws_private_key_name:
+        description: "Name of a private key that is used to connect to AWS EC2 instances that will be created by this workflow."
+        type: string
+
+      cicd_workflow:
+        description: "Additional string that has to differentiate AWS object from another workflows."
+        type: string
+
 
 jobs:
-  # Special job which automatically cancels old runs for the same branch, prevents runs for the
-  # same file set which has already passed, etc.
-  pre_job:
-    name: Skip Duplicate Jobs Pre Job
-    runs-on: ubuntu-latest
-    outputs:
-      should_skip: ${{ steps.skip_check.outputs.should_skip }}
-    steps:
-        # Since we allow triggering of this workflow with 'push' and 'pull_request' events,
-        # there has to be a duplicated triggering when we push into a branch which has also a PR opened.
-        # This job has to skip duplicates in this case, but it's also important, in case of opened PR,
-        # to not skip the 'pull_request' event because it has to perform more extra tests, rather that regular 'push'
-        # event triggered workflow.
-      - name: "Determine which trigger event can not be skipped."
-        id: get_events_to_not_skip
-        run: |
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            echo 'events_to_not_skip=["workflow_dispatch", "schedule", "pull_request"]' >> $GITHUB_OUTPUT
-          else
-            echo 'events_to_not_skip=["workflow_dispatch", "schedule"]' >> $GITHUB_OUTPUT
-          fi
+#  build_and_cache_image_requirements:
+#    name: Build package ${{ matrix.builder.name }}
+#    runs-on: ubuntu-22.04
+#
+#    strategy:
+#      matrix:
+#        builder_name: ["ubuntu", "alpine"]
+#        architecture: ["x86_64"]
+#
+#    steps:
+#      - name: Checkout repository
+#        uses: actions/checkout@v3
+#
+#      - name: install python and requirements
+#        uses: ./.github/actions/install_python_and_requirements
+#        with:
+#          python_version: ${{ inputs.python_version }}
+#
+#      - name: Set up QEMU
+#        id: qemu
+#        uses: docker/setup-qemu-action@2b82ce82d56a2a04d2637cd93a637ae1b359c0a7 # v2
+#        with:
+#          image: tonistiigi/binfmt:qemu-v6.2.0
+#          platforms: all
+#
+#      - name: Set up Docker Buildx
+#        uses: docker/setup-buildx-action@ecf95283f03858871ff00b787d79c419715afc34 # v2.0.0
+#        with:
+#          driver-opts: network=host
+#
+#      - name: Expose GitHub Runtime To Be Able to Use GHA Cache By Docker.
+#        uses: crazy-max/ghaction-github-runtime@715c25b40ccc0df9b62bfa8be3ccc57d09dbc4b1
+#
+#      - name: Build package
+#        shell: bash
+#        id: build
+#        env:
+#          AWS_ACCESS_KEY: ${{ secrets.CT_AWS_DEV_EC2_ACCESS_KEY }}
+#          AWS_SECRET_KEY: ${{ secrets.CT_AWS_DEV_EC2_SECRET_KEY }}
+#          AWS_PRIVATE_KEY_NAME: ${{ inputs.aws_private_key_name }}
+#          AWS_PRIVATE_KEY_PATH: "/tmp/private_key.pem"
+#          AWS_REGION: ${{ inputs.aws_region }}
+#          USE_GHA_CACHE: "1"
+#          ALLOW_FALLBACK_TO_REMOTE_BUILDER: "1"
+#          CACHE_VERSION: ${{ inputs.cache_version }}
+#          CICD_WORKFLOW: ${{ inputs.cicd_workflow }}
+#          CICD_JOB: ${{ matrix.builder.name }}
+#        run: |
+#          echo "${{ secrets.CT_AWS_DEV_EC2_PRIVATE_KEY }}" > "${AWS_PRIVATE_KEY_PATH}"
+#          chmod 600 "${AWS_PRIVATE_KEY_PATH}"
+#
+#          python3 build_package_new_refactored.py \
+#            image \
+#            ${{ matrix.builder_name }} \
+#            build-only-cache-dependency \
+#            --architecture=${{ matrix.architecture }}
 
-      - id: skip_check
-        uses: fkirc/skip-duplicate-actions@12aca0a884f6137d619d6a8a09fcc3406ced5281 # v4.0.0
-        with:
-          cancel_others: 'true'
-          concurrent_skipping: 'same_content'
-          do_not_skip: "${{ steps.get_events_to_not_skip.outputs.events_to_not_skip }}"
-          github_token: ${{ github.token }}
+  build_image:
+    name: Build package ${{ matrix.builder.name }}
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        builder_name: ["ubuntu", "alpine"]
+        image_type: ["k8s", "docker-json", "docker-syslog", "docker-api"]
 
-  coverage:
-    runs-on: ubuntu-latest
-    if: success() || failure()
-    needs:
-      - pre_job
-      - k8s-smoketest
-      - docker-smoketest
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v3
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        id: setup-python
-        with:
-          python-version: 3.8
-      - name: Install pycoverage
-        run: pip install coverage==4.5.4
-      - name: Download coverage reports
-        uses: actions/download-artifact@v3
-        with:
-          path: reports
 
-      - name: Prepare Coverage Data for codecov.io
+      - name: install python and requirements
+        uses: ./.github/actions/install_python_and_requirements
+        with:
+          python_version: ${{ inputs.python_version }}
+
+      - name: Set up QEMU
+        id: qemu
+        uses: docker/setup-qemu-action@2b82ce82d56a2a04d2637cd93a637ae1b359c0a7 # v2
+        with:
+          image: tonistiigi/binfmt:qemu-v6.2.0
+          platforms: all
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@ecf95283f03858871ff00b787d79c419715afc34 # v2.0.0
+        with:
+          driver-opts: network=host
+
+      - name: Expose GitHub Runtime To Be Able to Use GHA Cache By Docker.
+        uses: crazy-max/ghaction-github-runtime@715c25b40ccc0df9b62bfa8be3ccc57d09dbc4b1
+
+      - name: Build package
+        shell: bash
+        id: build
+        env:
+          AWS_ACCESS_KEY: ${{ secrets.CT_AWS_DEV_EC2_ACCESS_KEY }}
+          AWS_SECRET_KEY: ${{ secrets.CT_AWS_DEV_EC2_SECRET_KEY }}
+          AWS_PRIVATE_KEY_NAME: ${{ inputs.aws_private_key_name }}
+          AWS_PRIVATE_KEY_PATH: "/tmp/private_key.pem"
+          AWS_REGION: ${{ inputs.aws_region }}
+          USE_GHA_CACHE: "1"
+          ALLOW_FALLBACK_TO_REMOTE_BUILDER: "1"
+          CACHE_VERSION: ${{ inputs.cache_version }}
+          CICD_WORKFLOW: ${{ inputs.cicd_workflow }}
+          CICD_JOB: ${{ matrix.builder.name }}
         run: |
-          coverage combine reports/**/.coverage
-          coverage xml -i -o coverage.xml
+          echo "${{ secrets.CT_AWS_DEV_EC2_PRIVATE_KEY }}" > "${AWS_PRIVATE_KEY_PATH}"
+          chmod 600 "${AWS_PRIVATE_KEY_PATH}"
+          
+          python3 build_package_new_refactored.py \
+            image \
+            ${{ matrix.builder_name }} \
+            build \
+            --image-type ${{ matrix.image_type }} \
+            --output-dir ./build
 
-      - name: Upload Coverage to Codecov.io
-        uses: codecov/codecov-action@eaaf4bedf32dbdc6b720b63067d99c4d77d6047d # pin@v3.1.4
+      - name: Save image OCI tarball as artifact
+        uses: actions/upload-artifact@v3
         with:
-          files: ./coverage.xml
-          fail_ci_if_error: true
+          name: container-image-tarball-${{ matrix.builder_name }}-${{ matrix.image_type }}
+          path: build
+          retention-days: 1
 
   # Jobs which performs basic sanity checks for the Kubernetes Monitor and Kubernetes Events Monitor
   k8s_kubernetes_monitor_tests:
@@ -84,7 +152,8 @@ jobs:
     runs-on: ubuntu-20.04
     timeout-minutes: 15
 
-    needs: pre_job
+    needs:
+      - build_image
     # NOTE: We always want to run job on master branch
     if: ${{ needs.pre_job.outputs.should_skip != 'true' || github.ref_name == 'master' }}
 
@@ -294,7 +363,8 @@ jobs:
     runs-on: ubuntu-20.04
     timeout-minutes: 15
 
-    needs: pre_job
+    needs:
+      - build_image
     # NOTE: We always want to run job on master branch
     if: ${{ needs.pre_job.outputs.should_skip != 'true' || github.ref_name == 'master' }}
 
@@ -469,7 +539,8 @@ jobs:
 
   k8s-smoketest:
     runs-on: ubuntu-20.04
-    needs: pre_job
+    needs:
+      - build_image
     # NOTE: We always want to run job on master branch
     if: ${{ needs.pre_job.outputs.should_skip != 'true' || github.ref_name == 'master' }}
     steps:
@@ -523,7 +594,8 @@ jobs:
 
   docker-smoketest:
     name: Docker Smoketest - ${{ matrix.variant.log_mode }}
-    needs: pre_job
+    needs:
+      - build_image
     # NOTE: We always want to run job on master branch
     if: ${{ needs.pre_job.outputs.should_skip != 'true' || github.ref_name == 'master' }}
     runs-on: ubuntu-20.04
@@ -550,6 +622,7 @@ jobs:
         run: |
           pip install -r dev-requirements.txt
           pip install "apache-libcloud==3.4.1"
+
       - name: Run Tests (with coverage)
         env:
           CIRCLE_BUILD_NUM: ${{ github.run_number }}
@@ -577,43 +650,75 @@ jobs:
           steps: ${{ toJson(steps) }}
           channel: '#eng-dataset-cloud-tech'
 
-  # Runs agent from it source and performs some basic sanity checks.
-  agent-source-tests:
-    runs-on: ${{ matrix.os }}
-    needs: pre_job
-    # NOTE: We always want to run job on master branch
-    if: ${{ needs.pre_job.outputs.should_skip != 'true' || github.ref_name == 'master' }}
-    container: ${{ matrix.container }}
-    strategy:
-      matrix:
-        os: [ "macos-11", "ubuntu-20.04" ]
-        python-version: [ "3.7.13" ]
-        # Uncomment when windows platform and service related issues are fixed.
-    #        include:
-    #          - os: "windows-2019"
-    #            python-version: "3.7.9"
-
-
+  coverage:
+    runs-on: ubuntu-latest
+    if: success() || failure()
+    needs:
+      - k8s-smoketest
+      - docker-smoketest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
-
-      - name: Install python
+      - name: Setup Python
         uses: actions/setup-python@v4
+        id: setup-python
         with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Perform the deployment of the test environment
-        uses: ./.github/actions/perform-deployment
+          python-version: 3.8
+      - name: Install pycoverage
+        run: pip install coverage==4.5.4
+      - name: Download coverage reports
+        uses: actions/download-artifact@v3
         with:
-          deployment-name: "test_environment"
+          path: reports
 
-      - name: Run tests
-        shell: bash
+      - name: Prepare Coverage Data for codecov.io
         run: |
-          python3 -m pytest  tests/end_to_end_tests/test_from_source/test_from_source.py \
-            --scalyr-api-key ${{ secrets.CT_SCALYR_TOKEN_PROD_US_CLOUDTECH_TESTING_WRITE }} \
-            --scalyr-api-read-key ${{ secrets.CT_SCALYR_TOKEN_PROD_US_CLOUDTECH_TESTING_READ }} \
-            --test-session-suffix ${{ github.run_id }}-${{ github.run_attempt }}
+          coverage combine reports/**/.coverage
+          coverage xml -i -o coverage.xml
+
+      - name: Upload Coverage to Codecov.io
+        uses: codecov/codecov-action@eaaf4bedf32dbdc6b720b63067d99c4d77d6047d # pin@v3.1.4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: true
+
+#  # Runs agent from it source and performs some basic sanity checks.
+#  agent-source-tests:
+#    runs-on: ${{ matrix.os }}
+#    needs: pre_job
+#    # NOTE: We always want to run job on master branch
+#    if: ${{ needs.pre_job.outputs.should_skip != 'true' || github.ref_name == 'master' }}
+#    container: ${{ matrix.container }}
+#    strategy:
+#      matrix:
+#        os: [ "macos-11", "ubuntu-20.04" ]
+#        python-version: [ "3.7.13" ]
+#        # Uncomment when windows platform and service related issues are fixed.
+#    #        include:
+#    #          - os: "windows-2019"
+#    #            python-version: "3.7.9"
+#
+#
+#    steps:
+#      - name: Checkout Repository
+#        uses: actions/checkout@v3
+#
+#      - name: Install python
+#        uses: actions/setup-python@v4
+#        with:
+#          python-version: ${{ matrix.python-version }}
+#
+#      - name: Perform the deployment of the test environment
+#        uses: ./.github/actions/perform-deployment
+#        with:
+#          deployment-name: "test_environment"
+#
+#      - name: Run tests
+#        shell: bash
+#        run: |
+#          python3 -m pytest  tests/end_to_end_tests/test_from_source/test_from_source.py \
+#            --scalyr-api-key ${{ secrets.CT_SCALYR_TOKEN_PROD_US_CLOUDTECH_TESTING_WRITE }} \
+#            --scalyr-api-read-key ${{ secrets.CT_SCALYR_TOKEN_PROD_US_CLOUDTECH_TESTING_READ }} \
+#            --test-session-suffix ${{ github.run_id }}-${{ github.run_attempt }}
 
 

@@ -3,7 +3,7 @@ import pathlib as pl
 import shutil
 from typing import Dict, Set, List
 
-from agent_build_refactored.tools.constants import CpuArch, OCI_LAYOUTS_DIR, AGENT_REQUIREMENTS, AGENT_BUILD_OUTPUT_PATH, SOURCE_ROOT
+from agent_build_refactored.tools.constants import CpuArch, OCI_LAYOUTS_DIR, AGENT_REQUIREMENTS, AGENT_BUILD_OUTPUT_PATH, SOURCE_ROOT, REQUIREMENTS_DEV_COVERAGE
 from agent_build_refactored.tools.docker.buildx.build import buildx_build, OCITarballBuildOutput, LocalDirectoryBuildOutput, BuildOutput
 
 
@@ -16,60 +16,65 @@ BASE_DISTRO_IMAGE_NAMES = {
     "alpine": ALPINE_BASE_IMAGE,
 }
 
-_existing_built_images: Dict[str, Set[CpuArch]] = collections.defaultdict(set)
+_existing_built_dependencies: Dict[str, Set[CpuArch]] = collections.defaultdict(set)
 
 
 def build_agent_image_dependencies(
     base_distro: str,
-    architectures: List[CpuArch],
-    output: BuildOutput,
+    architecture: CpuArch,
+    output_dir: pl.Path = None,
 
 ):
-    global _existing_built_images
+    global _existing_built_dependencies
 
-    arch_suffix = ""
-    for arch in architectures:
-        arch_suffix = f"{arch_suffix}_{arch.value}"
-    cache_name = f"agent_container_image_dependencies_{base_distro}_{arch_suffix}"
+    cache_name = f"agent_container_image_dependencies_{base_distro}_{architecture.value}"
     result_dir = AGENT_BUILD_OUTPUT_PATH / cache_name
 
-    # def _copy_output():
-    #     output_dir.mkdir(parents=True, exist_ok=True)
-    #     shutil.copytree(
-    #         result_dir,
-    #         output_dir,
-    #         dirs_exist_ok=True,
-    #         symlinks=True,
-    #     )
+    def _copy_output():
+        if not output_dir:
+            return
 
-    # if architecture in _existing_built_images[base_distro]:
-    #     #_copy_output()
-    #     return result_dir
+        output_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(
+            result_dir,
+            output_dir,
+            dirs_exist_ok=True,
+            symlinks=True,
+        )
+
+    if architecture in _existing_built_dependencies[base_distro]:
+        _copy_output()
+        return result_dir
 
     if result_dir.exists():
         shutil.rmtree(result_dir)
 
     base_image_name = BASE_DISTRO_IMAGE_NAMES[base_distro]
+    test_requirements = f"{REQUIREMENTS_DEV_COVERAGE}"
+
+    if output_dir:
+        output = LocalDirectoryBuildOutput(
+            dest=result_dir,
+        )
+    else:
+        output = None
 
     buildx_build(
         dockerfile_path=_PARENT_DIR / "Dockerfile",
         context_path=_PARENT_DIR,
-        architecture=architectures,
+        architecture=architecture,
         build_args={
             "BASE_DISTRO": base_distro,
             "AGENT_REQUIREMENTS": AGENT_REQUIREMENTS,
+            "TEST_REQUIREMENTS": test_requirements,
         },
         build_contexts={
             "base_image": f"docker-image://{base_image_name}",
         },
-        # output=LocalDirectoryBuildOutput(
-        #     dest=result_dir,
-        # ),
         output=output,
         cache_name=cache_name,
-        #fallback_to_remote_builder=True,
     )
 
-    # _existing_built_images[base_distro].add(architecture)
-    # _copy_output()
-    # return result_dir
+    _existing_built_dependencies[base_distro].add(architecture)
+    _copy_output()
+    return result_dir

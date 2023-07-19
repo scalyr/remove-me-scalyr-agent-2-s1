@@ -89,17 +89,27 @@ class ContainerisedAgentBuilder(Builder):
     def dependencies_dir(self) -> pl.Path:
         return self.work_dir / "dependencies"
 
-    def _build_dependencies(
-        self,
-        architectures: List[CpuArch],
-        output: BuildOutput,
+    @classmethod
+    def build_dependencies(
+        cls,
+        architectures: List[CpuArch] = None,
+        output_dir: pl.Path = None,
     ):
 
+        architectures = architectures or SUPPORTED_ARCHITECTURES[:]
+
         for arch in architectures:
+            if output_dir:
+                build_target_name = _arch_to_docker_build_target_folder(arch)
+                arch_dir = output_dir / build_target_name
+                output_dir = arch_dir
+            else:
+                output_dir = None
+
             build_agent_image_dependencies(
-                base_distro=self.__class__.BASE_DISTRO,
+                base_distro=cls.BASE_DISTRO,
                 architecture=arch,
-                output=output,
+                output_dir=output_dir,
             )
 
     def generate_final_registry_tags(
@@ -118,8 +128,6 @@ class ContainerisedAgentBuilder(Builder):
 
         return result_names
 
-
-
     def _build(self):
         #dependencies_dir = self.work_dir / "dependencies"
         # for arch in SUPPORTED_ARCHITECTURES:
@@ -129,10 +137,6 @@ class ContainerisedAgentBuilder(Builder):
         #         architecture=arch,
         #         output_dir=arch_dir,
         #     )
-        if self.architecture:
-            architectures = [self.architecture]
-        else:
-            architectures = SUPPORTED_ARCHITECTURES[:]
 
         # if not self.build_only_dependencies:
         #     dependencies_image_output = LocalDirectoryBuildOutput(
@@ -148,25 +152,30 @@ class ContainerisedAgentBuilder(Builder):
         # )
 
         if self.only_cache_dependency_arch:
-            architectures = [self.only_cache_dependency_arch]
+            dependency_architectures = [self.only_cache_dependency_arch]
+            output_dir = None
         else:
-            architectures = SUPPORTED_ARCHITECTURES[:]
+            dependency_architectures = None
+            output_dir = self.dependencies_dir
 
-        for arch in architectures:
-            if not self.only_cache_dependency_arch:
-                build_target_name = _arch_to_docker_build_target_folder(arch)
-                arch_dir = self.dependencies_dir / build_target_name
-                output = LocalDirectoryBuildOutput(
-                    dest=arch_dir,
-                )
-            else:
-                output = None
+        self.__class__.build_dependencies(
+            architectures=dependency_architectures,
+            output_dir=output_dir,
+        )
 
-            build_agent_image_dependencies(
-                base_distro=self.__class__.BASE_DISTRO,
-                architectures=[arch],
-                output=output,
-            )
+        # for arch in architectures:
+        #     if not self.only_cache_dependency_arch:
+        #         build_target_name = _arch_to_docker_build_target_folder(arch)
+        #         arch_dir = self.dependencies_dir / build_target_name
+        #         output_dir = arch_dir
+        #     else:
+        #         output_dir = None
+        #
+        #     build_agent_image_dependencies(
+        #         base_distro=self.__class__.BASE_DISTRO,
+        #         architecture=arch,
+        #         output_dir=output_dir,
+        #     )
         # self._build_dependencies(
         #     architectures=architectures
         # )
@@ -192,7 +201,7 @@ class ContainerisedAgentBuilder(Builder):
         buildx_build(
             dockerfile_path=_PARENT_DIR / "Dockerfile",
             context_path=_PARENT_DIR,
-            architecture=architectures,
+            architecture=SUPPORTED_ARCHITECTURES[:],
             build_args={
                 "BASE_DISTRO": self.__class__.BASE_DISTRO,
                 "IMAGE_TYPE": self.image_type.value
@@ -276,7 +285,6 @@ class ContainerisedAgentBuilder(Builder):
         delete_container(
             container_name=container_name,
         )
-
 
 def _arch_to_docker_build_target_folder(arch: CpuArch):
     if arch == CpuArch.x86_64:

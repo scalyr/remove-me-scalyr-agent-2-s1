@@ -20,7 +20,7 @@ FROM base_${BASE_DISTRO} as base
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
-COPY --from=requirements /${TARGETOS}_${TARGETARCH}_${TARGETVARIANT} /
+COPY --from=requirements /${TARGETOS}_${TARGETARCH}_${TARGETVARIANT}/requirements /
 COPY --from=agent_filesystem / /
 
 

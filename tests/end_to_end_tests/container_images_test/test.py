@@ -1,2 +1,2 @@
-def test_d(image_test_version):
+def test_d(test_image_tag):
     pass
