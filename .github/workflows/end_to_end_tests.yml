@@ -691,7 +691,7 @@ jobs:
     if: success() || failure()
     needs:
       - k8s-smoketest
-      - docker-smoketest
+      #- docker-smoketest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
