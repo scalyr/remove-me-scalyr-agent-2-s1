@@ -790,11 +790,11 @@ jobs:
           name: container-image-tarball-${{ matrix.variant.builder_name }}
           path: /tmp/image_tarball
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@465a07811f14bebb1938fbed4728c6a1ff8901fc  # v2
-        with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME_TEST_ACCOUNT }}
-          password: ${{ secrets.DOCKER_HUB_PASSWORD_TEST_ACCOUNT }}
+#      - name: Log in to Docker Hub
+#        uses: docker/login-action@465a07811f14bebb1938fbed4728c6a1ff8901fc  # v2
+#        with:
+#          username: ${{ secrets.DOCKER_HUB_USERNAME_TEST_ACCOUNT }}
+#          password: ${{ secrets.DOCKER_HUB_PASSWORD_TEST_ACCOUNT }}
 
 
       - name: Verify and Create Tags
