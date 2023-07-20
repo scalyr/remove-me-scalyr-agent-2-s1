@@ -831,6 +831,6 @@ jobs:
             --registry docker.io \
             --user=${{ secrets.DOCKERHUB_USERNAME }} \
             --tags=${{ steps.verify.outputs.tags }} \
-            --from-oci-layout-dir /tmp/image_tarball/${{ matrix.variant.image_type }}.tar \
+            --from-oci-layout-dir /tmp/image_tarball/${{ matrix.variant.builder_name }}.tar \
             --registry-username ${{ secrets.DOCKERHUB_USERNAME }} \
             --registry-password ${{ secrets.DOCKERHUB_PASSWORD }}
