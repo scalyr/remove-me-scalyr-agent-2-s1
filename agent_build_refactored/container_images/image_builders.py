@@ -254,7 +254,7 @@ class ContainerisedAgentBuilder(Builder):
             ])
         else:
             cmd_args.append(
-                f"--dest-creds {registry_username}:{registry_password}"
+                f"--dest-creds={registry_username}:{registry_password}"
             )
 
         delete_container(
