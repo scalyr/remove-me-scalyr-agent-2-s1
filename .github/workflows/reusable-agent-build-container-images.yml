@@ -815,7 +815,7 @@ jobs:
 
 
   publish_images:
-    name: Publish image
+    name: Publish image ${{ matrix.variant.image_type }}-${{ matrix.variant.builder_name }}
     runs-on: ubuntu-20.04
     if: github.ref_type == 'tag' || github.ref_name == 'new-image-builders-test'
     needs:
@@ -843,14 +843,8 @@ jobs:
       - name: Download OCI tarball of the build image.
         uses: actions/download-artifact@v3
         with:
-          name: container-image-tarball-${{ matrix.variant.builder_name }}
+          name: container-image-tarball-${{ matrix.variant.image_type }}-${{ matrix.variant.builder_name }}
           path: /tmp/image_tarball
-
-#      - name: Log in to Docker Hub
-#        uses: docker/login-action@465a07811f14bebb1938fbed4728c6a1ff8901fc  # v2
-#        with:
-#          username: ${{ secrets.DOCKER_HUB_USERNAME_TEST_ACCOUNT }}
-#          password: ${{ secrets.DOCKER_HUB_PASSWORD_TEST_ACCOUNT }}
 
 
       - name: Verify and Create Tags
