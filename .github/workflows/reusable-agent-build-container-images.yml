@@ -803,6 +803,7 @@ jobs:
           
           if [ "${{ github.ref_type }}" = "tag" ]; then
             AGENT_VERSION=$(cat VERSION | tr -d '\n')"
+            
             if [ "${{ github.ref_name }}" = "${AGENT_VERSION}" ]; then
               echo "publish=true" >> "${GITHUB_OUTPUT}"
               echo "tags=${{ github.ref_name }},latest" >> "${GITHUB_OUTPUT}"
@@ -813,9 +814,9 @@ jobs:
           fi
 
       - name: Publish image
-        if: steps.verify.outputs.publish == 'true'
+        #if: steps.verify.outputs.publish == 'true'
         run: |
-          
+          echo "${{ steps.verify.outputs.publish  }}"
           python3 build_package_new.py \
             image \
             ${{ matrix.variant.builder_name }} \
