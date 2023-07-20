@@ -100,14 +100,14 @@ jobs:
     strategy:
       matrix:
         variant:
-          { "builder_name": "k8s-ubuntu" }
-          { "builder_name": "k8s-alpine" }
-          { "builder_name": "docker-json-ubuntu" }
-          { "builder_name": "docker-json-alpine" }
-          { "builder_name": "docker-syslog-ubuntu" }
-          { "builder_name": "docker-syslog-alpine" }
-          { "builder_name": "docker-api-ubuntu" }
-          { "builder_name": "docker-api-alpine" }
+          - { "builder_name": "k8s-ubuntu" }
+          - { "builder_name": "k8s-alpine" }
+          - { "builder_name": "docker-json-ubuntu" }
+          - { "builder_name": "docker-json-alpine" }
+          - { "builder_name": "docker-syslog-ubuntu" }
+          - { "builder_name": "docker-syslog-alpine" }
+          - { "builder_name": "docker-api-ubuntu" }
+          - { "builder_name": "docker-api-alpine" }
 
     steps:
       - name: Checkout repository
