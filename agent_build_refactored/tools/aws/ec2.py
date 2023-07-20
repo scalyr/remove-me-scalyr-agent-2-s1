@@ -585,7 +585,7 @@ def terminate_ec2_instances_and_security_groups(
                     )
                 except botocore.exceptions.ClientError as e:
                     if "has a dependent object" in str(e):
-                        logger.info("    ")
+                        logger.info("    Security group still has dependent objects.")
                         if attempts == 0:
                             logger.exception("    Give up")
                             raise
