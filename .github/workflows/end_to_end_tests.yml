@@ -306,10 +306,6 @@ jobs:
           K8S_NODE_NAME: "${{ env.K8S_NODE_NAME }}"
         run: |
           
-          /usr/bin/env python3 --version
-          /usr/bin/env python --version
-          which python
-          exit 1
           export RETRY_ATTEMPTS="14"
           export SLEEP_DELAY="10"
 
