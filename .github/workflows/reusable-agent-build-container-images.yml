@@ -41,7 +41,7 @@ on:
 
 jobs:
   build_image_requirements:
-    name: Build image requirements-${{ matrix.builder_name }}-${{ matrix.architecture }}
+    name: requirements-${{ matrix.builder_name }}-${{ matrix.architecture }}
     runs-on: ubuntu-22.04
     strategy:
       matrix:
@@ -96,13 +96,6 @@ jobs:
             ${{ matrix.builder_name }} \
             cache-requirements \
             --architecture ${{ matrix.architecture }}
-
-      - name: Save image OCI tarball as artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: container-image-tarball-${{ matrix.variant.builder_name }}
-          path: build
-          retention-days: 1
 
 
   build_image:
@@ -168,7 +161,7 @@ jobs:
           python3 build_package_new.py \
             image \
             ${{ matrix.variant.builder_name }} \
-            build 
+            build-tarball \
             --image-type ${{  matrix.variant.image_type }} \
             --output-dir ./build
 

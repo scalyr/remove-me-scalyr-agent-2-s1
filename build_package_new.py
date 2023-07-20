@@ -65,7 +65,7 @@ if __name__ == "__main__":
             choices=[t.value for t in ImageType],
         )
 
-    image_build_parser = image_parser_action_subparsers.add_parser("build")
+    image_build_parser = image_parser_action_subparsers.add_parser("build-tarball")
     _add_image_type_arg(image_build_parser)
     image_build_parser.add_argument(
         "--output-dir",
@@ -113,7 +113,7 @@ if __name__ == "__main__":
 
         builder = image_builder_cls()
 
-        if args.action == "build":
+        if args.action == "build-tarball":
             if args.output_dir:
                 output_dir = pl.Path(args.output_dir)
             else:
