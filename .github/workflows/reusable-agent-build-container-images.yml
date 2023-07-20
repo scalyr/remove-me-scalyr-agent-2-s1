@@ -803,12 +803,14 @@ jobs:
           
           if [ "${{ github.ref_type }}" = "tag" ]; then
             AGENT_VERSION=$(cat VERSION | tr -d '\n')"
-            
+            echo "1"
             if [ "${{ github.ref_name }}" = "${AGENT_VERSION}" ]; then
+              echo "111"
               echo "publish=true" >> "${GITHUB_OUTPUT}"
               echo "tags=${{ github.ref_name }},latest" >> "${GITHUB_OUTPUT}"
             fi
           else
+              echo "2"
               echo "publish=true" >> "${GITHUB_OUTPUT}"
               echo "tags=${{ github.sha }} >> "${GITHUB_OUTPUT}"
           fi
