@@ -39,6 +39,7 @@ from agent_build_refactored.utils.constants import SOURCE_ROOT, CpuArch
 from agent_build_refactored.utils.common import init_logging
 from agent_build_refactored.container_images.image_builders import (
     ALL_CONTAINERISED_AGENT_BUILDERS,
+    ImageType,
 )
 
 init_logging()
@@ -57,14 +58,28 @@ if __name__ == "__main__":
 
     image_parser_action_subparsers = image_parser.add_subparsers(dest="action", required=True)
 
+    def _add_image_type_arg(_parser):
+        _parser.add_argument(
+            "--image_type",
+            required=True,
+            choices=[t.value for t in ImageType],
+        )
+
     image_build_parser = image_parser_action_subparsers.add_parser("build")
+    _add_image_type_arg(image_build_parser)
     image_build_parser.add_argument(
         "--output-dir",
         required=True,
     )
 
-    image_publish_parser = image_parser_action_subparsers.add_parser("publish")
+    cache_requirements_image_parser = image_parser_action_subparsers.add_parser("cache-requirements")
+    cache_requirements_image_parser.add_argument(
+        "--architecture",
+        required=True,
+    )
 
+    image_publish_parser = image_parser_action_subparsers.add_parser("publish")
+    _add_image_type_arg(image_publish_parser)
     image_publish_parser.add_argument(
         "--registry",
         required=True,
@@ -104,10 +119,16 @@ if __name__ == "__main__":
             else:
                 output_dir = None
 
-            builder.build(
+            builder.build_oci_tarball(
+                image_type=ImageType(args.image_type),
                 output_dir=output_dir
             )
             exit(0)
+        elif args.action == "cache-requirements":
+            builder.build_requirement_libs(
+                architecture=CpuArch(args.architecture),
+            )
+
         elif args.action == "publish":
             tags = args.tags.split(",")
 
@@ -117,6 +138,7 @@ if __name__ == "__main__":
                 existing_oci_layout_dir = None
 
             final_tags = builder.generate_final_registry_tags(
+                image_type=ImageType(args.image_type),
                 registry=args.registry,
                 user=args.user,
                 tags=tags

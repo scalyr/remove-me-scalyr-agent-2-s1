@@ -15,8 +15,8 @@ from agent_build_refactored.prepare_agent_filesystem import build_linux_fhs_agen
 
 SUPPORTED_ARCHITECTURES = [
     CpuArch.x86_64,
-    CpuArch.AARCH64,
-    CpuArch.ARMV7,
+    # CpuArch.AARCH64,
+    # CpuArch.ARMV7,
 ]
 
 logger = logging.getLogger(__name__)
@@ -43,15 +43,14 @@ _IMAGE_REGISTRY_NAMES = {
 
 class ContainerisedAgentBuilder(Builder):
     BASE_DISTRO: str
-    IMAGE_TYPE: ImageType
     TAG_SUFFIXES: List[str]
 
-    _requirements_libs_already_built = False
+    _already_built_requirements_libs: Set[CpuArch] = set()
     _final_image_base_already_built = False
 
-    @property
-    def result_oci_layout_tarball_path(self) -> pl.Path:
-        return self.result_dir / f"{self.__class__.NAME}.tar"
+    # @property
+    # def result_oci_layout_tarball_path(self) -> pl.Path:
+    #     return self.result_dir / f"{self.__class__.NAME}.tar"
 
     @property
     def dependencies_dir(self) -> pl.Path:
@@ -115,39 +114,48 @@ class ContainerisedAgentBuilder(Builder):
         self.__class__._final_image_base_already_built = True
         return result_image_oci_layout
 
-    def build_requirement_libs(self):
+    def build_requirement_libs(
+            self,
+            architecture: CpuArch,
+            only_cache: bool = False,
+            fallback_to_remote_builder: bool = False,
+    ):
         """
         Build a special stage in the dependency Dockerfile, which is responsible for
         building agent requirement libs.
         """
 
         stage_name = "requirement_libs"
-        result_dir = self.work_dir / stage_name
 
-        if self.__class__._requirements_libs_already_built:
+        result_dir = self.work_dir / stage_name / architecture.value
+
+        if architecture in self.__class__._already_built_requirements_libs:
             return result_dir
 
-        for arch in SUPPORTED_ARCHITECTURES:
-            build_target_name = _arch_to_docker_build_target_folder(arch)
-            arch_dir = result_dir / build_target_name
+        cache_name = f"container-image-build-{self.__class__.BASE_DISTRO}-{stage_name}_{architecture.value}"
 
-            cache_name = f"container-image-build-{self.__class__.BASE_DISTRO}-{stage_name}_{arch.value}"
-
-            self._build_dependencies(
-                stage=stage_name,
-                cache_name=cache_name,
-                architectures=arch,
-                output=LocalDirectoryBuildOutput(
-                    dest=arch_dir,
-                ),
-                fallback_to_remote_builder=True,
+        if only_cache:
+            output = None
+        else:
+            output = LocalDirectoryBuildOutput(
+                dest=result_dir,
             )
 
-        self.__class__._requirements_libs_already_built = True
-        return result_dir
+        self._build_dependencies(
+            stage=stage_name,
+            cache_name=cache_name,
+            architectures=architecture,
+            output=output,
+            fallback_to_remote_builder=fallback_to_remote_builder,
+        )
+
+        if not only_cache:
+            self.__class__._already_built_requirements_libs.add(architecture)
+            return result_dir
 
     def generate_final_registry_tags(
         self,
+        image_type: ImageType,
         registry: str,
         user: str,
         tags: List[str],
@@ -161,7 +169,7 @@ class ContainerisedAgentBuilder(Builder):
         """
         result_names = []
 
-        for image_name in _IMAGE_REGISTRY_NAMES[self.__class__.IMAGE_TYPE]:
+        for image_name in _IMAGE_REGISTRY_NAMES[image_type]:
             for tag in tags:
                 for tag_suffix in self.__class__.TAG_SUFFIXES:
                     final_name = f"{registry}/{user}/{image_name}:{tag}{tag_suffix}"
@@ -169,7 +177,10 @@ class ContainerisedAgentBuilder(Builder):
 
         return result_names
 
-    def create_agent_filesystem(self):
+    def create_agent_filesystem(
+        self,
+        image_type: ImageType
+    ):
         """
         Prepare agent files, like source code and configurations.
 
@@ -182,7 +193,7 @@ class ContainerisedAgentBuilder(Builder):
         pl.Path(agent_filesystem_dir / "var/log/scalyr-agent-2/containers").mkdir()
 
         # Add config file
-        config_name = self.__class__.IMAGE_TYPE.value
+        config_name = image_type.value
         config_path = SOURCE_ROOT / "docker" / f"{config_name}-config"
         add_config(config_path, agent_filesystem_dir / "etc/scalyr-agent-2")
 
@@ -203,13 +214,32 @@ class ContainerisedAgentBuilder(Builder):
         agent_main_path.write_text(new_agent_main_content)
         return agent_filesystem_dir
 
-    def _build(self):
+    def build_oci_tarball(
+        self,
+        image_type: ImageType,
+        output_dir: pl.Path = None,
 
-        requirement_libs_dir = self.build_requirement_libs()
+    ):
 
         final_image_base_oci_layout_dir = self._build_final_image_base_oci_layout()
 
-        agent_filesystem_dir = self.create_agent_filesystem()
+        agent_filesystem_dir = self.create_agent_filesystem(image_type=image_type)
+
+        requirements_libs_contexts = {}
+        for architecture in SUPPORTED_ARCHITECTURES:
+            build_target_name = _arch_to_docker_build_target_folder(
+                arch=architecture,
+            )
+
+            context_full_name = f"requirement_libs_{build_target_name}_context"
+
+            requirement_libs_dir = self.build_requirement_libs(
+                architecture=architecture,
+            )
+
+            requirements_libs_contexts[context_full_name] = str(requirement_libs_dir)
+
+        result_tarball = self.result_dir / f"{image_type.value}-{self.__class__.NAME}.tar"
 
         buildx_build(
             dockerfile_path=_PARENT_DIR / "Dockerfile",
@@ -217,21 +247,32 @@ class ContainerisedAgentBuilder(Builder):
             architecture=SUPPORTED_ARCHITECTURES[:],
             build_args={
                 "BASE_DISTRO": self.__class__.BASE_DISTRO,
-                "IMAGE_TYPE": self.__class__.IMAGE_TYPE.value
+                "IMAGE_TYPE": image_type.value
             },
             build_contexts={
                 "base_image": f"oci-layout:///{final_image_base_oci_layout_dir}",
-                "requirement_libs": str(requirement_libs_dir),
+                #"requirement_libs": str(requirement_libs_dir),
                 "agent_filesystem": str(agent_filesystem_dir),
+                **requirements_libs_contexts,
             },
             output=OCITarballBuildOutput(
-                dest=self.result_oci_layout_tarball_path,
+                dest=result_tarball,
                 extract=False,
             )
         )
 
+        if output_dir:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy(
+                result_tarball,
+                output_dir,
+            )
+
+        return result_tarball
+
     def publish(
         self,
+        image_type: ImageType,
         tags: List[str],
         existing_oci_layout_dir: pl.Path = None,
         registry_username: str = None,
@@ -240,8 +281,7 @@ class ContainerisedAgentBuilder(Builder):
         if existing_oci_layout_dir:
             oci_layer = existing_oci_layout_dir
         else:
-            self.build()
-            oci_layer = self.result_oci_layout_tarball_path
+            oci_layer = self.build_oci_tarball(image_type=image_type)
 
         container_name = "agent_image_publish_skopeo"
 
@@ -301,17 +341,17 @@ def _arch_to_docker_build_target_folder(arch: CpuArch):
 ALL_CONTAINERISED_AGENT_BUILDERS: Dict[str, Type[ContainerisedAgentBuilder]] = {}
 
 for base_distro in ["ubuntu", "alpine"]:
-    for image_type in ImageType:
-        tag_suffixes = [f"-{base_distro}"]
-        if base_distro == "ubuntu":
-            tag_suffixes.append("")
+    #for image_type in ImageType:
+    tag_suffixes = [f"-{base_distro}"]
+    if base_distro == "ubuntu":
+        tag_suffixes.append("")
 
-        name = f"{image_type.value}-{base_distro}"
+    name = base_distro
 
-        class _ContainerisedAgentBuilder(ContainerisedAgentBuilder):
-            NAME = name
-            BASE_DISTRO = base_distro
-            IMAGE_TYPE = image_type
-            TAG_SUFFIXES = tag_suffixes[:]
+    class _ContainerisedAgentBuilder(ContainerisedAgentBuilder):
+        NAME = name
+        BASE_DISTRO = base_distro
+        #IMAGE_TYPE = image_type
+        TAG_SUFFIXES = tag_suffixes[:]
 
-        ALL_CONTAINERISED_AGENT_BUILDERS[name] = _ContainerisedAgentBuilder
+    ALL_CONTAINERISED_AGENT_BUILDERS[name] = _ContainerisedAgentBuilder

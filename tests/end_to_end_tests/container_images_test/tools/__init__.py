@@ -5,12 +5,17 @@ from typing import Type
 from agent_build_refactored.utils.constants import CpuArch
 from agent_build_refactored.utils.docker.common import delete_container
 from agent_build_refactored.utils.docker.buildx.build import buildx_build, DockerImageBuildOutput
-from agent_build_refactored.container_images.image_builders import ALL_CONTAINERISED_AGENT_BUILDERS, ContainerisedAgentBuilder
+from agent_build_refactored.container_images.image_builders import (
+    ALL_CONTAINERISED_AGENT_BUILDERS,
+    ContainerisedAgentBuilder,
+    ImageType,
+)
 
 _PARENT_DIR = pl.Path(__file__).parent
 
 
 def build_test_version_of_container_image(
+    image_type: ImageType,
     image_builder_cls: Type[ContainerisedAgentBuilder],
     architecture: CpuArch,
     result_image_name: str,
@@ -39,19 +44,23 @@ def build_test_version_of_container_image(
     )
     try:
         all_image_tags = image_builder.generate_final_registry_tags(
+            image_type=image_type,
             registry="localhost:5000",
             user="user",
             tags=["prod"],
         )
 
         image_builder.publish(
+            image_type=image_type,
             tags=all_image_tags,
             existing_oci_layout_dir=ready_image_oci_tarball
         )
 
         prod_image_tag = all_image_tags[0]
 
-        requirement_libs_dir = image_builder.build_requirement_libs()
+        requirement_libs_dir = image_builder.build_requirement_libs(
+            architecture=architecture,
+        )
 
         buildx_build(
             dockerfile_path=_PARENT_DIR / "Dockerfile",

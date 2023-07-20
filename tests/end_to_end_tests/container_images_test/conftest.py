@@ -4,7 +4,11 @@ from typing import Callable
 import pytest
 
 from agent_build_refactored.utils.constants import CpuArch
-from agent_build_refactored.container_images.image_builders import ALL_CONTAINERISED_AGENT_BUILDERS, SUPPORTED_ARCHITECTURES
+from agent_build_refactored.container_images.image_builders import (
+    ALL_CONTAINERISED_AGENT_BUILDERS,
+    SUPPORTED_ARCHITECTURES,
+    ImageType,
+)
 from tests.end_to_end_tests.container_images_test.tools import build_test_version_of_container_image
 
 
@@ -16,6 +20,12 @@ def add_command_line_args(add_func: Callable):
         "--image-builder-name",
         required=True,
         choices=ALL_CONTAINERISED_AGENT_BUILDERS.keys(),
+    )
+
+    add_func(
+        "--image_type",
+        required=True,
+        choices=[t.value for t in ImageType]
     )
 
     add_func(

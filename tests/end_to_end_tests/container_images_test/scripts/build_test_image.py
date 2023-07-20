@@ -13,6 +13,7 @@ from tests.end_to_end_tests.container_images_test.tools import (
     get_image_builder_by_name,
     build_test_version_of_container_image,
 )
+from agent_build_refactored.container_images.image_builders import ImageType
 
 init_logging()
 
@@ -33,6 +34,7 @@ if __name__ == '__main__':
     image_builder_cls = get_image_builder_by_name(name=args.image_builder_name)
 
     build_test_version_of_container_image(
+        image_type=ImageType(args.image_type),
         image_builder_cls=image_builder_cls,
         architecture=CpuArch(args.architecture),
         result_image_name=args.result_image_name,

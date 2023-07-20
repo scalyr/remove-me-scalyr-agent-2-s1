@@ -1,10 +1,12 @@
 ARG IMAGE_TYPE
 
+FROM requirement_libs_${TARGETOS}_${TARGETARCH}_${TARGETVARIANT}_context as requirement_libs
+
 FROM base_image as base
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
-COPY --from=requirement_libs /${TARGETOS}_${TARGETARCH}_${TARGETVARIANT}/requirements /
+COPY --from=requirement_libs /requirements /
 COPY --from=agent_filesystem / /
 
 # Optional stage for docker-json.
