@@ -1,10 +1,9 @@
-import abc
 import enum
 import logging
 import pathlib as pl
 import shutil
 import subprocess
-from typing import Dict, Type, List, Set, Union
+from typing import Dict, Type, List, Union
 
 from agent_build_refactored.utils.constants import SOURCE_ROOT, CpuArch, AGENT_REQUIREMENTS, REQUIREMENTS_DEV_COVERAGE
 from agent_build_refactored.utils.docker.common import delete_container
@@ -42,15 +41,12 @@ _IMAGE_REGISTRY_NAMES = {
 
 
 class ContainerisedAgentBuilder(Builder):
+    """
+    Class that builds agent container images.
+    """
+
     BASE_DISTRO: str
     TAG_SUFFIXES: List[str]
-
-    _already_built_requirements_libs: Set[CpuArch] = set()
-    _final_image_base_already_built = False
-
-    # @property
-    # def result_oci_layout_tarball_path(self) -> pl.Path:
-    #     return self.result_dir / f"{self.__class__.NAME}.tar"
 
     @property
     def dependencies_dir(self) -> pl.Path:
@@ -100,9 +96,6 @@ class ContainerisedAgentBuilder(Builder):
         stage_name = "final_image_base"
         result_image_oci_layout = self.work_dir / stage_name
 
-        if self.__class__._final_image_base_already_built:
-            return result_image_oci_layout
-
         self._build_dependencies(
             stage=stage_name,
             architectures=SUPPORTED_ARCHITECTURES[:],
@@ -111,7 +104,6 @@ class ContainerisedAgentBuilder(Builder):
             ),
         )
 
-        self.__class__._final_image_base_already_built = True
         return result_image_oci_layout
 
     def build_requirement_libs(
@@ -128,9 +120,6 @@ class ContainerisedAgentBuilder(Builder):
         stage_name = "requirement_libs"
 
         result_dir = self.work_dir / stage_name / architecture.value
-
-        if architecture in self.__class__._already_built_requirements_libs:
-            return result_dir
 
         cache_name = f"container-image-build-{self.__class__.BASE_DISTRO}-{stage_name}_{architecture.value}"
 
@@ -150,7 +139,6 @@ class ContainerisedAgentBuilder(Builder):
         )
 
         if not only_cache:
-            self.__class__._already_built_requirements_libs.add(architecture)
             return result_dir
 
     def generate_final_registry_tags(
@@ -218,9 +206,10 @@ class ContainerisedAgentBuilder(Builder):
         self,
         image_type: ImageType,
         output_dir: pl.Path = None,
-
     ):
-
+        """
+        Build image in the form of the OCI tarball
+        """
         final_image_base_oci_layout_dir = self._build_final_image_base_oci_layout()
 
         agent_filesystem_dir = self.create_agent_filesystem(image_type=image_type)
@@ -251,7 +240,6 @@ class ContainerisedAgentBuilder(Builder):
             },
             build_contexts={
                 "base_image": f"oci-layout:///{final_image_base_oci_layout_dir}",
-                #"requirement_libs": str(requirement_libs_dir),
                 "agent_filesystem": str(agent_filesystem_dir),
                 **requirements_libs_contexts,
             },
@@ -278,6 +266,16 @@ class ContainerisedAgentBuilder(Builder):
         registry_username: str = None,
         registry_password: str = None,
     ):
+        """
+        Publish image
+        :param image_type: Type of image
+        :param tags: list of tags
+        :param existing_oci_layout_dir: Path to existing image OCI tarball. If exists, it will publish image from this
+            tarball. If not new image will be built inplace.
+        :param registry_username: Registry login
+        :param registry_password: Registry password
+        :return:
+        """
         if existing_oci_layout_dir:
             oci_layer = existing_oci_layout_dir
         else:
@@ -289,6 +287,8 @@ class ContainerisedAgentBuilder(Builder):
             container_name=container_name,
         )
 
+        # use skopeo tool to copy image.
+        # also use it from container so we don't have to rly on a local installation.
         cmd_args = [
             "docker",
             "run",
@@ -342,10 +342,11 @@ def _arch_to_docker_build_target_folder(arch: CpuArch):
         return "linux_arm_v7"
 
 
+# Create all image builder classes and make them available from this global collection.
 ALL_CONTAINERISED_AGENT_BUILDERS: Dict[str, Type[ContainerisedAgentBuilder]] = {}
 
+
 for base_distro in ["ubuntu", "alpine"]:
-    #for image_type in ImageType:
     tag_suffixes = [f"-{base_distro}"]
     if base_distro == "ubuntu":
         tag_suffixes.append("")
@@ -355,7 +356,6 @@ for base_distro in ["ubuntu", "alpine"]:
     class _ContainerisedAgentBuilder(ContainerisedAgentBuilder):
         NAME = name
         BASE_DISTRO = base_distro
-        #IMAGE_TYPE = image_type
         TAG_SUFFIXES = tag_suffixes[:]
 
     ALL_CONTAINERISED_AGENT_BUILDERS[name] = _ContainerisedAgentBuilder
