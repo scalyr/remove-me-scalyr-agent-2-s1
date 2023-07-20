@@ -3,14 +3,13 @@ import enum
 import logging
 import pathlib as pl
 import subprocess
-from typing import Dict, Type, List
+from typing import Dict, Type, List, Set
 
 from agent_build_refactored.tools.constants import SOURCE_ROOT, CpuArch, AGENT_REQUIREMENTS, REQUIREMENTS_DEV_COVERAGE
 from agent_build_refactored.tools.docker.common import delete_container
 from agent_build_refactored.tools.builder import Builder
 from agent_build_refactored.tools.docker.buildx.build import buildx_build, DockerImageBuildOutput, OCITarballBuildOutput, BuildOutput, LocalDirectoryBuildOutput
 
-from agent_build_refactored.container_images.base_images import UBUNTU_BASE_IMAGE, ALPINE_BASE_IMAGE
 from agent_build_refactored.prepare_agent_filesystem import build_linux_fhs_agent_files, add_config
 
 SUPPORTED_ARCHITECTURES = [
@@ -21,12 +20,6 @@ SUPPORTED_ARCHITECTURES = [
 
 logger = logging.getLogger(__name__)
 _PARENT_DIR = pl.Path(__file__).parent
-
-
-BASE_DISTRO_IMAGE_NAMES = {
-    "ubuntu": UBUNTU_BASE_IMAGE,
-    "alpine": ALPINE_BASE_IMAGE,
-}
 
 
 class ImageType(enum.Enum):
@@ -47,30 +40,12 @@ _IMAGE_REGISTRY_NAMES = {
 }
 
 
-# class ContainerisedAgentBuilder(Builder):
-#     BASE_DISTRO: str
-#     TAG_SUFFIXES: List[str]
-#
-#     @abc.abstractmethod
-#     def _build_dependencies(self):
-#         pass
-#
-#     @abc.abstractmethod
-#     def publish(
-#         self,
-#         registry: str,
-#         user: str,
-#         tags: List[str],
-#         existing_oci_layer: pl.Path = None,
-#         registry_username: str = None,
-#         registry_password: str = None,
-#     ):
-#         pass
-
-
 class ContainerisedAgentBuilder(Builder):
     BASE_DISTRO: str
     TAG_SUFFIXES: List[str]
+
+    _requirements_libs_already_built = False
+    _final_image_base_already_built = False
 
     def __init__(
         self,
@@ -93,44 +68,76 @@ class ContainerisedAgentBuilder(Builder):
         return self.work_dir / "dependencies"
 
     @classmethod
-    def build_dependencies(
+    def _build_dependencies(
         cls,
-        architectures: List[CpuArch] = None,
-        output_dir: pl.Path = None,
+        stage: str,
+        architectures: List[CpuArch],
+        output: BuildOutput,
+        cache_name: str = None,
     ):
 
-        architectures = architectures or SUPPORTED_ARCHITECTURES[:]
+        test_requirements = f"{REQUIREMENTS_DEV_COVERAGE}"
 
-        for arch in architectures:
-            if output_dir:
-                build_target_name = _arch_to_docker_build_target_folder(arch)
-                arch_dir = output_dir / build_target_name
-                output = LocalDirectoryBuildOutput(
+        buildx_build(
+            dockerfile_path=_PARENT_DIR / "dependencies.Dockerfile",
+            context_path=_PARENT_DIR,
+            architecture=architectures,
+            build_args={
+                "BASE_DISTRO": base_distro,
+                "AGENT_REQUIREMENTS": AGENT_REQUIREMENTS,
+                "TEST_REQUIREMENTS": test_requirements,
+            },
+            stage=stage,
+            output=output,
+            cache_name=cache_name,
+        )
+
+    def _build_final_image_base_oci_layout(self):
+
+        stage_name = "final_image_base"
+        result_image_oci_layout = self.work_dir / stage_name
+
+        if self.__class__._final_image_base_already_built:
+            return result_image_oci_layout
+
+        self._build_dependencies(
+            stage=stage_name,
+            architectures=SUPPORTED_ARCHITECTURES[:],
+            output=OCITarballBuildOutput(
+                dest=result_image_oci_layout,
+            ),
+        )
+
+        self.__class__._final_image_base_already_built = True
+        return result_image_oci_layout
+
+    def build_requirement_libs(self):
+
+        stage_name = "requirement_libs"
+        result_dir = self.work_dir / stage_name
+
+        if self.__class__._requirements_libs_already_built:
+            return result_dir
+
+        base_cache_name = stage_name
+
+        for arch in SUPPORTED_ARCHITECTURES:
+            build_target_name = _arch_to_docker_build_target_folder(arch)
+            arch_dir = result_dir / build_target_name
+
+            cache_name = f"{base_cache_name}_{arch.value}"
+
+            self._build_dependencies(
+                stage=stage_name,
+                cache_name=cache_name,
+                architectures=[arch],
+                output=LocalDirectoryBuildOutput(
                     dest=arch_dir,
                 )
-            else:
-                output = None
-
-            cache_name = f"agent_container_image_dependencies_{cls.BASE_DISTRO}_{arch.value}"
-
-            base_image_name = BASE_DISTRO_IMAGE_NAMES[base_distro]
-            test_requirements = f"{REQUIREMENTS_DEV_COVERAGE}"
-
-            buildx_build(
-                dockerfile_path=_PARENT_DIR / "dependencies.Dockerfile",
-                context_path=_PARENT_DIR,
-                architecture=arch,
-                build_args={
-                    "BASE_DISTRO": base_distro,
-                    "AGENT_REQUIREMENTS": AGENT_REQUIREMENTS,
-                    "TEST_REQUIREMENTS": test_requirements,
-                },
-                build_contexts={
-                    "base_image": f"docker-image://{base_image_name}",
-                },
-                output=output,
-                cache_name=cache_name,
             )
+
+        self.__class__._requirements_libs_already_built = True
+        return result_dir
 
     def generate_final_registry_tags(
         self,
@@ -170,27 +177,14 @@ class ContainerisedAgentBuilder(Builder):
 
     def _build(self):
 
-        if self.only_cache_dependency_arch:
-            dependency_architectures = [self.only_cache_dependency_arch]
-            output_dir = None
-        else:
-            dependency_architectures = None
-            output_dir = self.dependencies_dir
+        requirement_libs_dir = self.build_requirement_libs()
 
-        self.__class__.build_dependencies(
-            architectures=dependency_architectures,
-            output_dir=output_dir,
-        )
-
-        if self.only_cache_dependency_arch:
-            return
+        final_image_base_oci_layout_dir = self._build_final_image_base_oci_layout()
 
         if self.image_type is None:
             raise Exception("Image type has to be specified for a full build.")
 
         agent_filesystem_dir = self.create_agent_filesystem()
-
-        base_image_name = BASE_DISTRO_IMAGE_NAMES[self.__class__.BASE_DISTRO]
 
         buildx_build(
             dockerfile_path=_PARENT_DIR / "Dockerfile",
@@ -201,8 +195,8 @@ class ContainerisedAgentBuilder(Builder):
                 "IMAGE_TYPE": self.image_type.value
             },
             build_contexts={
-                "base_image": f"docker-image://{base_image_name}",
-                "requirements": str(self.dependencies_dir),
+                "base_image": f"oci-layout:///{final_image_base_oci_layout_dir}",
+                "requirement_libs": str(requirement_libs_dir),
                 "agent_filesystem": str(agent_filesystem_dir),
             },
             output=OCITarballBuildOutput(

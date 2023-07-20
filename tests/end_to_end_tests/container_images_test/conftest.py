@@ -8,7 +8,6 @@ from agent_build_refactored.tools.constants import CpuArch, REQUIREMENTS_DEV_COV
 from agent_build_refactored.tools.docker.common import delete_container
 from agent_build_refactored.tools.docker.buildx.build import buildx_build, DockerImageBuildOutput, LocalDirectoryBuildOutput
 
-from agent_build_refactored.container_images.dependencies import build_agent_image_dependencies
 from agent_build_refactored.container_images.image_builders import ALL_CONTAINERISED_AGENT_BUILDERS, ImageType, SUPPORTED_ARCHITECTURES
 from tests.end_to_end_tests.container_images_test.tools import build_test_version_of_container_image
 
@@ -74,6 +73,7 @@ def test_image_tag(image_builder_cls, image_type, request):
         image_builder_cls=image_builder_cls,
         image_type=image_type,
         ready_image_oci_tarball=request.config.option.image_oci_tarball,
+        result_image_name="test",
     )
     yield image_name
 

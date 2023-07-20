@@ -91,6 +91,7 @@ def buildx_build(
         architecture: Union[CpuArch, List[CpuArch]],
         build_args: Dict[str, str] = None,
         build_contexts: Dict[str, str] = None,
+        stage: str = None,
         output: BuildOutput = None,
         cache_name: str = None,
         fallback_to_remote_builder: bool = False,
@@ -128,6 +129,11 @@ def buildx_build(
     for name, value in build_contexts.items():
         cmd_args.append(
             f"--build-context={name}={value}"
+        )
+
+    if stage:
+        cmd_args.append(
+            f"--target={stage}"
         )
 
     if cache_name:

@@ -27,18 +27,18 @@ def build_test_version_of_container_image(
         container_name=registry_container_name
     )
 
-    subprocess.run(
-        [
-            "docker",
-            "run",
-            "-d",
-            "--rm",
-            "-p=5000:5000",
-            f"--name={registry_container_name}",
-            "registry:2",
-        ],
-        check=True
-    )
+    # subprocess.run(
+    #     [
+    #         "docker",
+    #         "run",
+    #         "-d",
+    #         "--rm",
+    #         "-p=5000:5000",
+    #         f"--name={registry_container_name}",
+    #         "registry:2",
+    #     ],
+    #     check=True
+    # )
     try:
         all_image_tags = image_builder.generate_final_registry_tags(
             registry="localhost:5000",
@@ -53,11 +53,7 @@ def build_test_version_of_container_image(
 
         prod_image_tag = all_image_tags[0]
 
-        test_dependencies_dir = AGENT_BUILD_OUTPUT_PATH / "container_image_e2e_test_dependencies"
-
-        image_builder_cls.build_dependencies(
-            output_dir=test_dependencies_dir,
-        )
+        requirement_libs_dir = image_builder.build_requirement_libs()
 
         buildx_build(
             dockerfile_path=_PARENT_DIR / "Dockerfile",
@@ -68,7 +64,7 @@ def build_test_version_of_container_image(
             },
             build_contexts={
                 "prod_image": f"docker-image://{prod_image_tag}",
-                "dependencies": str(test_dependencies_dir),
+                "requirement_libs": str(requirement_libs_dir),
             },
             output=DockerImageBuildOutput(
                 name=result_image_name,

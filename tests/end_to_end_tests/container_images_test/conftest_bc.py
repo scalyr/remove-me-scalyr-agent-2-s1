@@ -133,7 +133,7 @@ def test_image_tag(all_image_tags, prod_image_tag, image_builder_cls, image_type
     )
 
     dirr = pl.Path("/Users/arthur/PycharmProjects/scalyr-agent-2-final/agent_build_output/ffffffff")
-    image_builder_cls.build_dependencies(
+    image_builder_cls._build_dependencies(
         output_dir=dirr,
     )
     image_name = "test_version"

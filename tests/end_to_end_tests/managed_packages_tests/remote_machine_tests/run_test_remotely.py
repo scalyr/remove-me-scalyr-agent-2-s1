@@ -104,7 +104,7 @@ class RemoteTestDependenciesBuilder(Builder):
             architecture=architecture,
             output_dir=python_dependency_dir,
         )
-        # aio_builder.build_dependencies(
+        # aio_builder._build_dependencies(
         #     output=LocalDirectoryBuildOutput(
         #         dest=python_dependency_dir,
         #     )

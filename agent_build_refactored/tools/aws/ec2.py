@@ -23,7 +23,6 @@ import logging
 from typing import List, Optional, Dict
 
 import botocore.exceptions
-import paramiko
 import requests
 
 from agent_build_refactored.tools.aws.common import COMMON_TAG_NAME, AWSSettings

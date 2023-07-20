@@ -11,6 +11,6 @@ FROM prod_image
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
-COPY --from=dependencies /${TARGETOS}_${TARGETARCH}_${TARGETVARIANT}/test_requirements /
+COPY --from=requirement_libs /${TARGETOS}_${TARGETARCH}_${TARGETVARIANT}/test_requirements /
 
 CMD ["python3", "-m", "coverage", "run", "--branch", "/usr/share/scalyr-agent-2/py/scalyr_agent/agent_main.py","--no-fork", "--no-change-user", "start"]

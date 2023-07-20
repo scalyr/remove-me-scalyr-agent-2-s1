@@ -625,7 +625,7 @@ class LinuxAIOPackagesBuilder(LinuxPackageBuilder):
             architecture=self.__class__.ARCHITECTURE,
             output_dir=dependencies_dir,
         )
-        # self.build_dependencies(
+        # self._build_dependencies(
         #     output=LocalDirectoryBuildOutput(
         #         dest=dependencies_dir,
         #     )
