@@ -223,17 +223,9 @@ def buildx_build(
             architecture=remote_builder_arch,
         )
 
-        if USE_GHA_CACHE:
-            cache_scope = _get_gha_cache_scope(name=cache_name)
-            cache_to_option = f"type=gha,scope={cache_scope}"
-        else:
-            cache_dir = _get_local_cache_dir(name=cache_name)
-            cache_to_option = f"type=local,dest={cache_dir}"
-
         result = subprocess.run(
             [
                 *cmd_args,
-                f"--cache-to={cache_to_option}",
                 f"--builder={builder.name}",
             ],
             check=True,
