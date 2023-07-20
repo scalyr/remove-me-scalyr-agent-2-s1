@@ -23,6 +23,9 @@ ARG TARGETVARIANT
 COPY --from=requirements /${TARGETOS}_${TARGETARCH}_${TARGETVARIANT}/requirements /
 COPY --from=agent_filesystem / /
 
+# Also create 'python' executable since some of our source code has it in shebang.
+RUN ln -s -f python3 "$(dirname $(which python3))/python"
+
 
 
 # Optional stage for docker-json.

@@ -73,10 +73,6 @@ function retry_on_failure {
 
 function query_scalyr {
     echo_with_date "Using query '${SCALYR_TOOL_QUERY}'"
-
-    python --version
-    /usr/bin/env python --version
-    which python
     RESULT=$(eval "scalyr query '${SCALYR_TOOL_QUERY}' --columns='timestamp,severity,message' --start='20m' --count='100' --output multiline")
     RESULT_LINES=$(echo -e "${RESULT}" | sed '/^$/d' | wc -l)
 

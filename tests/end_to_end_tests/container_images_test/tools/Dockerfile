@@ -12,6 +12,5 @@ ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
 COPY --from=dependencies /${TARGETOS}_${TARGETARCH}_${TARGETVARIANT}/test_requirements /
-RUN cp "$(which python3)" "$(which python3)-original"
-ADD python_coverage_wrapper.sh /tmp/python_coverage_wrapper.sh
-RUN mv /tmp/python_coverage_wrapper.sh "$(which python3)"
+
+CMD ["python3", "-m", "coverage", "run", "--branch", "/usr/share/scalyr-agent-2/py/scalyr_agent/agent_main.py","--no-fork", "--no-change-user", "start"]
