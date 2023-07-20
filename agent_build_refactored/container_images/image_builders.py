@@ -8,14 +8,14 @@ from typing import Dict, Type, List, Set
 from agent_build_refactored.tools.constants import SOURCE_ROOT, CpuArch, AGENT_REQUIREMENTS, REQUIREMENTS_DEV_COVERAGE
 from agent_build_refactored.tools.docker.common import delete_container
 from agent_build_refactored.tools.builder import Builder
-from agent_build_refactored.tools.docker.buildx.build import buildx_build, DockerImageBuildOutput, OCITarballBuildOutput, BuildOutput, LocalDirectoryBuildOutput
+from agent_build_refactored.tools.docker.buildx.build import buildx_build, OCITarballBuildOutput, BuildOutput, LocalDirectoryBuildOutput
 
 from agent_build_refactored.prepare_agent_filesystem import build_linux_fhs_agent_files, add_config
 
 SUPPORTED_ARCHITECTURES = [
     CpuArch.x86_64,
-    #CpuArch.AARCH64,
-    #CpuArch.ARMV7,
+    CpuArch.AARCH64,
+    CpuArch.ARMV7,
 ]
 
 logger = logging.getLogger(__name__)
@@ -64,7 +64,14 @@ class ContainerisedAgentBuilder(Builder):
         output: BuildOutput,
         cache_name: str = None,
     ):
-
+        """
+        Perform build of the dependency Dockerfile. This dockerfile is responsible for building
+        multiple dependencies that are used during image build.
+        :param stage: Name of a stage to build in a Dockerfile.
+        :param architectures: List of architectures to build.
+        :param output: Desired output type of the build.
+        :param cache_name: Name of the cache. If specified, then the result of a build will be cached.
+        """
         test_requirements = f"{REQUIREMENTS_DEV_COVERAGE}"
 
         buildx_build(
@@ -82,6 +89,10 @@ class ContainerisedAgentBuilder(Builder):
         )
 
     def _build_final_image_base_oci_layout(self):
+        """
+        Build a special stage in the dependency Dockerfile, which is responsible for building of base image
+        of the result image. MUST NOT be cached.
+        """
 
         stage_name = "final_image_base"
         result_image_oci_layout = self.work_dir / stage_name
@@ -101,6 +112,10 @@ class ContainerisedAgentBuilder(Builder):
         return result_image_oci_layout
 
     def build_requirement_libs(self):
+        """
+        Build a special stage in the dependency Dockerfile, which is responsible for
+        building agent requirement libs.
+        """
 
         stage_name = "requirement_libs"
         result_dir = self.work_dir / stage_name
@@ -133,7 +148,14 @@ class ContainerisedAgentBuilder(Builder):
         registry: str,
         user: str,
         tags: List[str],
-    ):
+    ) -> List[str]:
+        """
+        Create list of final tags using permutation of image names, tags and tag suffixes.
+        :param registry: Registry hostname
+        :param user: Registry username
+        :param tags: List of tags.
+        :return: List of final tags
+        """
         result_names = []
 
         for image_name in _IMAGE_REGISTRY_NAMES[self.__class__.IMAGE_TYPE]:
@@ -145,6 +167,10 @@ class ContainerisedAgentBuilder(Builder):
         return result_names
 
     def create_agent_filesystem(self):
+        """
+        Prepare agent files, like source code and configurations.
+
+        """
         agent_filesystem_dir = self.work_dir / "agent_filesystem"
         build_linux_fhs_agent_files(
             output_path=agent_filesystem_dir,
@@ -215,7 +241,6 @@ class ContainerisedAgentBuilder(Builder):
             "--net=host",
             f"-v={oci_layer}:/tmp/oci_layout.tar",
             "quay.io/skopeo/stable:latest",
-            #"--debug",
             "copy",
             "--all",
         ]
