@@ -5,15 +5,12 @@ import pathlib as pl
 import subprocess
 from typing import Dict, Type, List
 
-from agent_build_refactored.tools.constants import SOURCE_ROOT, CpuArch
+from agent_build_refactored.tools.constants import SOURCE_ROOT, CpuArch, AGENT_REQUIREMENTS, REQUIREMENTS_DEV_COVERAGE
 from agent_build_refactored.tools.docker.common import delete_container
 from agent_build_refactored.tools.builder import Builder
 from agent_build_refactored.tools.docker.buildx.build import buildx_build, DockerImageBuildOutput, OCITarballBuildOutput, BuildOutput, LocalDirectoryBuildOutput
 
-from agent_build_refactored.container_images.dependencies import (
-    build_agent_image_dependencies,
-    BASE_DISTRO_IMAGE_NAMES
-)
+from agent_build_refactored.container_images.base_images import UBUNTU_BASE_IMAGE, ALPINE_BASE_IMAGE
 from agent_build_refactored.prepare_agent_filesystem import build_linux_fhs_agent_files, add_config
 
 SUPPORTED_ARCHITECTURES = [
@@ -24,6 +21,12 @@ SUPPORTED_ARCHITECTURES = [
 
 logger = logging.getLogger(__name__)
 _PARENT_DIR = pl.Path(__file__).parent
+
+
+BASE_DISTRO_IMAGE_NAMES = {
+    "ubuntu": UBUNTU_BASE_IMAGE,
+    "alpine": ALPINE_BASE_IMAGE,
+}
 
 
 class ImageType(enum.Enum):
@@ -102,14 +105,31 @@ class ContainerisedAgentBuilder(Builder):
             if output_dir:
                 build_target_name = _arch_to_docker_build_target_folder(arch)
                 arch_dir = output_dir / build_target_name
-                output_dir = arch_dir
+                output = LocalDirectoryBuildOutput(
+                    dest=arch_dir,
+                )
             else:
-                output_dir = None
+                output = None
 
-            build_agent_image_dependencies(
-                base_distro=cls.BASE_DISTRO,
+            cache_name = f"agent_container_image_dependencies_{cls.BASE_DISTRO}_{arch.value}"
+
+            base_image_name = BASE_DISTRO_IMAGE_NAMES[base_distro]
+            test_requirements = f"{REQUIREMENTS_DEV_COVERAGE}"
+
+            buildx_build(
+                dockerfile_path=_PARENT_DIR / "dependencies.Dockerfile",
+                context_path=_PARENT_DIR,
                 architecture=arch,
-                output_dir=output_dir,
+                build_args={
+                    "BASE_DISTRO": base_distro,
+                    "AGENT_REQUIREMENTS": AGENT_REQUIREMENTS,
+                    "TEST_REQUIREMENTS": test_requirements,
+                },
+                build_contexts={
+                    "base_image": f"docker-image://{base_image_name}",
+                },
+                output=output,
+                cache_name=cache_name,
             )
 
     def generate_final_registry_tags(
@@ -141,6 +161,7 @@ class ContainerisedAgentBuilder(Builder):
         config_path = SOURCE_ROOT / "docker" / f"{config_name}-config"
         add_config(config_path, agent_filesystem_dir / "etc/scalyr-agent-2")
 
+        # Also change shebang in the agent_main file to python3, since all images fully switched to it.
         agent_main_path = agent_filesystem_dir / "usr/share/scalyr-agent-2/py/scalyr_agent/agent_main.py"
         agent_main_content = agent_main_path.read_text()
         new_agent_main_content = agent_main_content.replace("#!/usr/bin/env python", "#!/usr/bin/env python3", 1)
@@ -244,6 +265,7 @@ class ContainerisedAgentBuilder(Builder):
         delete_container(
             container_name=container_name,
         )
+
 
 def _arch_to_docker_build_target_folder(arch: CpuArch):
     if arch == CpuArch.x86_64:
