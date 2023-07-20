@@ -823,14 +823,14 @@ jobs:
     strategy:
       matrix:
         variant:
-          - { "builder_name": "ubuntu" , "image_type": "k8s" }
-          - { "builder_name": "ubuntu" , "image_type": "docker-json" }
-          - { "builder_name": "ubuntu" , "image_type": "docker-syslog" }
-          - { "builder_name": "ubuntu" , "image_type": "docker-api" }
-          - { "builder_name": "alpine" , "image_type": "k8s" }
-          - { "builder_name": "alpine" , "image_type": "docker-json" }
-          - { "builder_name": "alpine" , "image_type": "docker-syslog" }
-          - { "builder_name": "alpine" , "image_type": "docker-api" }
+          - { "builder_name": "ubuntu", "image_type": "k8s" }
+          - { "builder_name": "ubuntu", "image_type": "docker-json" }
+          - { "builder_name": "ubuntu", "image_type": "docker-syslog" }
+          - { "builder_name": "ubuntu", "image_type": "docker-api" }
+          - { "builder_name": "alpine", "image_type": "k8s" }
+          - { "builder_name": "alpine", "image_type": "docker-json" }
+          - { "builder_name": "alpine", "image_type": "docker-syslog" }
+          - { "builder_name": "alpine", "image_type": "docker-api" }
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
