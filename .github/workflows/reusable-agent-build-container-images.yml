@@ -799,6 +799,7 @@ jobs:
 
       - name: Verify and Create Tags
         id: verify
+        shell: bash
         run: |
           echo "6666"
           if [ "${{ github.ref_type }}" = "tag" ]; then
