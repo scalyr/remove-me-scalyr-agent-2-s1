@@ -95,12 +95,19 @@ jobs:
 #            --architecture=${{ matrix.architecture }}
 
   build_image:
-    name: Build package ${{ matrix.builder_name }}-${{ matrix.image_type }}
+    name: Build package ${{ matrix.variant.builder_name }}
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        builder_name: ["ubuntu", "alpine"]
-        image_type: ["k8s", "docker-json", "docker-syslog", "docker-api"]
+        variant:
+          { "builder_name": "k8s-ubuntu" }
+          { "builder_name": "k8s-alpine" }
+          { "builder_name": "docker-json-ubuntu" }
+          { "builder_name": "docker-json-alpine" }
+          { "builder_name": "docker-syslog-ubuntu" }
+          { "builder_name": "docker-syslog-alpine" }
+          { "builder_name": "docker-api-ubuntu" }
+          { "builder_name": "docker-api-alpine" }
 
     steps:
       - name: Checkout repository
@@ -136,7 +143,7 @@ jobs:
           AWS_PRIVATE_KEY_PATH: "/tmp/private_key.pem"
           AWS_REGION: ${{ inputs.aws_region }}
           CICD_WORKFLOW: ${{ inputs.cicd_workflow }}
-          CICD_JOB: ${{ matrix.builder.name }}
+          CICD_JOB: ${{ matrix.variant.builder_name }}
 
           USE_GHA_CACHE: "1"
           ALLOW_FALLBACK_TO_REMOTE_BUILDER: "1"
@@ -147,15 +154,14 @@ jobs:
           
           python3 build_package_new_refactored.py \
             image \
-            ${{ matrix.builder_name }} \
+            ${{ matrix.variant.builder_name }} \
             build \
-            --image-type ${{ matrix.image_type }} \
             --output-dir ./build
 
       - name: Save image OCI tarball as artifact
         uses: actions/upload-artifact@v3
         with:
-          name: container-image-tarball-${{ matrix.image_type }}-${{ matrix.builder_name }}
+          name: container-image-tarball-${{ matrix.variant.builder_name }}
           path: build
           retention-days: 1
 
@@ -236,8 +242,7 @@ jobs:
           CACHE_VERSION: ${{ inputs.cache_version }}
         run: |
           python3 tests/end_to_end_tests/container_images_test/scripts/build_test_image.py \
-            --image-builder-name ubuntu \
-            --image-type k8s \
+            --image-builder-name k8s-ubuntu \
             --architecture x86_64 \
             --image-oci-tarball /tmp/image_tarball/k8s-ubuntu.tar \
             --result-image-name k8s-ubuntu:test
@@ -473,8 +478,7 @@ jobs:
           CACHE_VERSION: ${{ inputs.cache_version }}
         run: |
           python3 tests/end_to_end_tests/container_images_test/scripts/build_test_image.py \
-            --image-builder-name ubuntu \
-            --image-type k8s \
+            --image-builder-name k8s-ubuntu \
             --architecture x86_64 \
             --image-oci-tarball /tmp/image_tarball/k8s-ubuntu.tar \
             --result-image-name k8s-ubuntu:test
@@ -657,8 +661,7 @@ jobs:
           CACHE_VERSION: ${{ inputs.cache_version }}
         run: |
           python3 tests/end_to_end_tests/container_images_test/scripts/build_test_image.py \
-            --image-builder-name ubuntu \
-            --image-type docker-json \
+            --image-builder-name k8s-ubuntu \
             --architecture x86_64 \
             --image-oci-tarball /tmp/image_tarball/k8s-ubuntu.tar \
             --result-image-name k8s-ubuntu:test
@@ -746,8 +749,7 @@ jobs:
           CACHE_VERSION: ${{ inputs.cache_version }}
         run: |
           python3 tests/end_to_end_tests/container_images_test/scripts/build_test_image.py \
-            --image-builder-name ubuntu \
-            --image-type docker-json \
+            --image-builder-name docker-json-ubuntu \
             --architecture x86_64 \
             --image-oci-tarball /tmp/image_tarball/${{ matrix.variant.image_type }}-ubuntu.tar \
             --result-image-name ${{ matrix.variant.image_type }}-ubuntu:test

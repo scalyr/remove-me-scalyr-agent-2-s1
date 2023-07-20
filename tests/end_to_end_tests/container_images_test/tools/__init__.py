@@ -12,14 +12,11 @@ _PARENT_DIR = pl.Path(__file__).parent
 
 def build_test_version_of_container_image(
     image_builder_cls: Type[ContainerisedAgentBuilder],
-    image_type: ImageType,
     result_image_name: str,
     ready_image_oci_tarball: pl.Path = None,
 ):
 
-    image_builder = image_builder_cls(
-        image_type=image_type,
-    )
+    image_builder = image_builder_cls()
 
     registry_container_name = "agent_image_e2e_test_registry"
 
@@ -59,9 +56,6 @@ def build_test_version_of_container_image(
             dockerfile_path=_PARENT_DIR / "Dockerfile",
             context_path=_PARENT_DIR,
             architecture=SUPPORTED_ARCHITECTURES[:],
-            build_args={
-                "REQUIREMENTS_FILE_CONTENT": REQUIREMENTS_DEV_COVERAGE,
-            },
             build_contexts={
                 "prod_image": f"docker-image://{prod_image_tag}",
                 "requirement_libs": str(requirement_libs_dir),

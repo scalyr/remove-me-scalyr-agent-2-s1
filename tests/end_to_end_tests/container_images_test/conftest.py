@@ -14,8 +14,8 @@ from tests.end_to_end_tests.container_images_test.tools import build_test_versio
 
 _PARENT_DIR = pl.Path(__file__).parent
 
-def add_command_line_args(parser, add_func: Callable):
 
+def add_command_line_args(add_func: Callable):
     add_func(
         "--image-builder-name",
         required=True,
@@ -29,12 +29,6 @@ def add_command_line_args(parser, add_func: Callable):
     )
 
     add_func(
-        "--image-type",
-        required=True,
-        choices=[t.value for t in ImageType],
-    )
-
-    add_func(
         "--image-oci-tarball",
         required=False,
     )
@@ -42,7 +36,6 @@ def add_command_line_args(parser, add_func: Callable):
 
 def pytest_addoption(parser):
     add_command_line_args(
-        parser=parser,
         add_func=parser.addoption
     )
 
@@ -58,20 +51,14 @@ def image_builder_cls(image_builder_name):
 
 
 @pytest.fixture(scope="session")
-def image_type(request):
-    return ImageType(request.config.option.image_type)
-
-
-@pytest.fixture(scope="session")
 def architecture(request):
     return CpuArch(request.config.option.architecture)
 
 
 @pytest.fixture(scope="session")
-def test_image_tag(image_builder_cls, image_type, request):
+def test_image_tag(image_builder_cls, request):
     image_name = build_test_version_of_container_image(
         image_builder_cls=image_builder_cls,
-        image_type=image_type,
         ready_image_oci_tarball=request.config.option.image_oci_tarball,
         result_image_name="test",
     )
