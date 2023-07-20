@@ -6,9 +6,8 @@ import sys
 # local packages. All such imports also have to be done after that.
 sys.path.append(str(pl.Path(__file__).parent.parent.parent.parent.parent.absolute()))
 
-from agent_build_refactored.tools.constants import CpuArch
-from agent_build_refactored.tools.common import init_logging
-from agent_build_refactored.container_images.image_builders import ImageType
+from agent_build_refactored.utils.constants import CpuArch
+from agent_build_refactored.utils.common import init_logging
 from tests.end_to_end_tests.container_images_test.conftest import add_command_line_args
 from tests.end_to_end_tests.container_images_test.tools import (
     get_image_builder_by_name,

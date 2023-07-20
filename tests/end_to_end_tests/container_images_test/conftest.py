@@ -1,14 +1,10 @@
 import pathlib as pl
-import subprocess
 from typing import Callable
 
 import pytest
 
-from agent_build_refactored.tools.constants import CpuArch, REQUIREMENTS_DEV_COVERAGE
-from agent_build_refactored.tools.docker.common import delete_container
-from agent_build_refactored.tools.docker.buildx.build import buildx_build, DockerImageBuildOutput, LocalDirectoryBuildOutput
-
-from agent_build_refactored.container_images.image_builders import ALL_CONTAINERISED_AGENT_BUILDERS, ImageType, SUPPORTED_ARCHITECTURES
+from agent_build_refactored.utils.constants import CpuArch
+from agent_build_refactored.container_images.image_builders import ALL_CONTAINERISED_AGENT_BUILDERS, SUPPORTED_ARCHITECTURES
 from tests.end_to_end_tests.container_images_test.tools import build_test_version_of_container_image
 
 
