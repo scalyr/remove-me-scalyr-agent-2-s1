@@ -72,7 +72,7 @@ class ContainerisedAgentBuilder(Builder):
             context_path=_PARENT_DIR,
             architecture=architectures,
             build_args={
-                "BASE_DISTRO": base_distro,
+                "BASE_DISTRO": cls.BASE_DISTRO,
                 "AGENT_REQUIREMENTS": AGENT_REQUIREMENTS,
                 "TEST_REQUIREMENTS": test_requirements,
             },
