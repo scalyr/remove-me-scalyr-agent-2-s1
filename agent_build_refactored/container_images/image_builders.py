@@ -15,8 +15,8 @@ from agent_build_refactored.prepare_agent_filesystem import build_linux_fhs_agen
 
 SUPPORTED_ARCHITECTURES = [
     CpuArch.x86_64,
-    # CpuArch.AARCH64,
-    # CpuArch.ARMV7,
+    CpuArch.AARCH64,
+    CpuArch.ARMV7,
 ]
 
 logger = logging.getLogger(__name__)
@@ -192,7 +192,7 @@ class ContainerisedAgentBuilder(Builder):
         for third_party_dir in agent_package_dir.glob("third_party*"):
             shutil.rmtree(third_party_dir)
 
-        # Remove cache
+        # Remove caches
         for pycache_dir in self.work_dir.rglob("__pycache__"):
             shutil.rmtree(pycache_dir)
 
