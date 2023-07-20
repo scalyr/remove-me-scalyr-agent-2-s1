@@ -43,14 +43,14 @@ jobs:
     strategy:
       matrix:
         variant:
-          - { "builder_name": "k8s-ubuntu" }
+#          - { "builder_name": "k8s-ubuntu" }
           - { "builder_name": "k8s-alpine" }
-          - { "builder_name": "docker-json-ubuntu" }
-          - { "builder_name": "docker-json-alpine" }
-          - { "builder_name": "docker-syslog-ubuntu" }
-          - { "builder_name": "docker-syslog-alpine" }
-          - { "builder_name": "docker-api-ubuntu" }
-          - { "builder_name": "docker-api-alpine" }
+#          - { "builder_name": "docker-json-ubuntu" }
+#          - { "builder_name": "docker-json-alpine" }
+#          - { "builder_name": "docker-syslog-ubuntu" }
+#          - { "builder_name": "docker-syslog-alpine" }
+#          - { "builder_name": "docker-api-ubuntu" }
+#          - { "builder_name": "docker-api-alpine" }
 
     steps:
       - name: Checkout repository
@@ -767,14 +767,14 @@ jobs:
     strategy:
       matrix:
         variant:
-          - { "builder_name": "k8s-ubuntu" }
+#          - { "builder_name": "k8s-ubuntu" }
           - { "builder_name": "k8s-alpine" }
-          - { "builder_name": "docker-json-ubuntu" }
-          - { "builder_name": "docker-json-alpine" }
-          - { "builder_name": "docker-syslog-ubuntu" }
-          - { "builder_name": "docker-syslog-alpine" }
-          - { "builder_name": "docker-api-ubuntu" }
-          - { "builder_name": "docker-api-alpine" }
+#          - { "builder_name": "docker-json-ubuntu" }
+#          - { "builder_name": "docker-json-alpine" }
+#          - { "builder_name": "docker-syslog-ubuntu" }
+#          - { "builder_name": "docker-syslog-alpine" }
+#          - { "builder_name": "docker-api-ubuntu" }
+#          - { "builder_name": "docker-api-alpine" }
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
@@ -800,7 +800,7 @@ jobs:
       - name: Verify and Create Tags
         id: verify
         run: |
-          
+          echo "6666"
           if [ "${{ github.ref_type }}" = "tag" ]; then
             AGENT_VERSION=$(cat VERSION | tr -d '\n')"
             echo "1"
