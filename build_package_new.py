@@ -144,7 +144,7 @@ if __name__ == "__main__":
                 tags=tags
             )
             builder.publish(
-                image_type=ImageType(args.image_typr),
+                image_type=ImageType(args.image_type),
                 tags=final_tags,
                 existing_oci_layout_dir=existing_oci_layout_dir,
                 registry_username=args.registry_username,

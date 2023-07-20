@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - master
-      - new-image-builders-test
     tags:
       - v*.*.*
   pull_request:

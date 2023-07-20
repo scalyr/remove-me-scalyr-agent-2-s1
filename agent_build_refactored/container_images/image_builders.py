@@ -285,6 +285,10 @@ class ContainerisedAgentBuilder(Builder):
 
         container_name = "agent_image_publish_skopeo"
 
+        delete_container(
+            container_name=container_name,
+        )
+
         cmd_args = [
             "docker",
             "run",
