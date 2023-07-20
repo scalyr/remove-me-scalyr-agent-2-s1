@@ -573,6 +573,23 @@ def terminate_ec2_instances_and_security_groups(
 
         for security_group_id in security_groups_ids_to_remove:
             logger.info(f"Delete Security group '{security_group_id}'.")
-            ec2_client.delete_security_group(
-                GroupId=security_group_id,
-            )
+            attempts = 5
+            delay = 20
+            while True:
+                try:
+                    ec2_client.delete_security_group(
+                        GroupId=security_group_id,
+                    )
+                except botocore.exceptions.ClientError as e:
+                    if "has a dependent object" in str(e):
+
+                        if attempts == 0:
+                            logger.exception("    Give up")
+                            raise
+
+                        logger.info(f"Retry in {delay} sec.")
+                        attempts -= 1
+                        time.sleep(delay)
+                        continue
+                    else:
+                        raise
