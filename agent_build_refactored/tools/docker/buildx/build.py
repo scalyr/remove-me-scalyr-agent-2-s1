@@ -163,7 +163,8 @@ def buildx_build(
         str(context_path)
     )
 
-    allow_fallback_to_remote_builder = ALLOW_FALLBACK_TO_REMOTE_BUILDER and isinstance(architecture, CpuArch)
+    single_arch = isinstance(architecture, CpuArch) or len(architecture) == 1
+    allow_fallback_to_remote_builder = ALLOW_FALLBACK_TO_REMOTE_BUILDER and single_arch
 
     retry = False
     if cache_name and fallback_to_remote_builder and allow_fallback_to_remote_builder:
@@ -172,7 +173,6 @@ def buildx_build(
             fallback_timeout = 60 * 2
         else:
             fallback_timeout = 40
-            #fallback_timeout = 5
 
         logger.info(
             "Try to preform build locally from cache. If that's not possible, will fallback to a remote builder."
