@@ -2,6 +2,7 @@ import abc
 import enum
 import logging
 import pathlib as pl
+import shutil
 import subprocess
 from typing import Dict, Type, List, Set, Union
 
@@ -14,8 +15,8 @@ from agent_build_refactored.prepare_agent_filesystem import build_linux_fhs_agen
 
 SUPPORTED_ARCHITECTURES = [
     CpuArch.x86_64,
-    CpuArch.AARCH64,
-    CpuArch.ARMV7,
+    # CpuArch.AARCH64,
+    # CpuArch.ARMV7,
 ]
 
 logger = logging.getLogger(__name__)
@@ -185,8 +186,18 @@ class ContainerisedAgentBuilder(Builder):
         config_path = SOURCE_ROOT / "docker" / f"{config_name}-config"
         add_config(config_path, agent_filesystem_dir / "etc/scalyr-agent-2")
 
+        agent_package_dir = agent_filesystem_dir / "usr/share/scalyr-agent-2/py/scalyr_agent"
+
+        # Remove unneeded third party requirements code.
+        for third_party_dir in agent_package_dir.glob("third_party*"):
+            shutil.rmtree(third_party_dir)
+
+        # Remove cache
+        for pycache_dir in agent_filesystem_dir.rglob("__pycache__"):
+            shutil.rmtree(pycache_dir)
+
         # Also change shebang in the agent_main file to python3, since all images fully switched to it.
-        agent_main_path = agent_filesystem_dir / "usr/share/scalyr-agent-2/py/scalyr_agent/agent_main.py"
+        agent_main_path = agent_package_dir / "agent_main.py"
         agent_main_content = agent_main_path.read_text()
         new_agent_main_content = agent_main_content.replace("#!/usr/bin/env python", "#!/usr/bin/env python3", 1)
         agent_main_path.write_text(new_agent_main_content)
