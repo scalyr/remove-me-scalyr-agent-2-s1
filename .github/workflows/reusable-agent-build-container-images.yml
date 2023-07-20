@@ -41,7 +41,7 @@ on:
 
 jobs:
   build_image_requirements:
-    name: Build image requirements${{ matrix.variant.builder_name }}
+    name: Build image requirements-${{ matrix.builder_name }}-${{ matrix.architecture }}
     runs-on: ubuntu-22.04
     strategy:
       matrix:
