@@ -63,6 +63,7 @@ class ContainerisedAgentBuilder(Builder):
         architectures: List[CpuArch],
         output: BuildOutput,
         cache_name: str = None,
+        fallback_to_remote_builder: bool = False,
     ):
         """
         Perform build of the dependency Dockerfile. This dockerfile is responsible for building
@@ -71,6 +72,7 @@ class ContainerisedAgentBuilder(Builder):
         :param architectures: List of architectures to build.
         :param output: Desired output type of the build.
         :param cache_name: Name of the cache. If specified, then the result of a build will be cached.
+        :param fallback_to_remote_builder: If True, can be build in a remote docker builder.
         """
         test_requirements = f"{REQUIREMENTS_DEV_COVERAGE}"
 
@@ -86,6 +88,7 @@ class ContainerisedAgentBuilder(Builder):
             stage=stage,
             output=output,
             cache_name=cache_name,
+            fallback_to_remote_builder=fallback_to_remote_builder,
         )
 
     def _build_final_image_base_oci_layout(self):
@@ -123,13 +126,11 @@ class ContainerisedAgentBuilder(Builder):
         if self.__class__._requirements_libs_already_built:
             return result_dir
 
-        base_cache_name = stage_name
-
         for arch in SUPPORTED_ARCHITECTURES:
             build_target_name = _arch_to_docker_build_target_folder(arch)
             arch_dir = result_dir / build_target_name
 
-            cache_name = f"{self.__class__.NAME}-{base_cache_name}_{arch.value}"
+            cache_name = f"{self.__class__.NAME}-{stage_name}_{arch.value}"
 
             self._build_dependencies(
                 stage=stage_name,
@@ -137,7 +138,8 @@ class ContainerisedAgentBuilder(Builder):
                 architectures=[arch],
                 output=LocalDirectoryBuildOutput(
                     dest=arch_dir,
-                )
+                ),
+                fallback_to_remote_builder=True,
             )
 
         self.__class__._requirements_libs_already_built = True
