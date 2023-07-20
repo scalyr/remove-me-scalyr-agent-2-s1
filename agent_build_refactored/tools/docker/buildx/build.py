@@ -163,8 +163,10 @@ def buildx_build(
         str(context_path)
     )
 
+    allow_fallback_to_remote_builder = ALLOW_FALLBACK_TO_REMOTE_BUILDER and isinstance(architecture, CpuArch)
+
     retry = False
-    if cache_name and fallback_to_remote_builder and ALLOW_FALLBACK_TO_REMOTE_BUILDER:
+    if cache_name and fallback_to_remote_builder and allow_fallback_to_remote_builder:
         if USE_GHA_CACHE:
             # Give more time if we build inside GitHub Action, because its cache may be pretty slow.
             fallback_timeout = 60 * 2
