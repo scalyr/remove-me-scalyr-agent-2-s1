@@ -130,7 +130,7 @@ class ContainerisedAgentBuilder(Builder):
             build_target_name = _arch_to_docker_build_target_folder(arch)
             arch_dir = result_dir / build_target_name
 
-            cache_name = f"{self.__class__.NAME}-{stage_name}_{arch.value}"
+            cache_name = f"container-image-build-{self.__class__.BASE_DISTRO}-{stage_name}_{arch.value}"
 
             self._build_dependencies(
                 stage=stage_name,

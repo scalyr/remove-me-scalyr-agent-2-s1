@@ -587,9 +587,12 @@ def terminate_ec2_instances_and_security_groups(
                             logger.exception("    Give up")
                             raise
 
-                        logger.info(f"Retry in {delay} sec.")
+                        logger.info(f"    Retry in {delay} sec.")
                         attempts -= 1
                         time.sleep(delay)
                         continue
+                    elif "InvalidGroup.NotFound" in str(e):
+                        logger.info("    Security group does not exists. Ignore.")
+                        break
                     else:
                         raise
