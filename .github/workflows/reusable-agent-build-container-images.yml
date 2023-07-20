@@ -869,7 +869,6 @@ jobs:
             image \
             ${{ matrix.variant.builder_name }} \
             publish \
-            --image-type ${{ matrix.variant.image_type }} \ 
             --registry docker.io \
             --user ${{ secrets.DOCKERHUB_USERNAME }} \
             --tags ${{ steps.verify.outputs.tags }} \
