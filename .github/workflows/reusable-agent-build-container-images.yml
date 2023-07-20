@@ -859,7 +859,7 @@ jobs:
             fi
           else
               echo "publish=true" >> "${GITHUB_OUTPUT}"
-              echo "tags=${{ github.sha }},latest" >> "${GITHUB_OUTPUT}"
+              echo "tags=${{ github.sha }}" >> "${GITHUB_OUTPUT}"
           fi
 
       - name: Publish image
@@ -874,4 +874,5 @@ jobs:
             --tags ${{ steps.verify.outputs.tags }} \
             --from-oci-layout-dir /tmp/image_tarball/${{ matrix.variant.image_type }}-${{ matrix.variant.builder_name }}.tar \
             --registry-username ${{ secrets.DOCKERHUB_USERNAME }} \
-            --registry-password ${{ secrets.DOCKERHUB_PASSWORD }}
+            --registry-password ${{ secrets.DOCKERHUB_PASSWORD }} \
+            --image-type ${{ matrix.variant.image_type }}
