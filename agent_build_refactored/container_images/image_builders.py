@@ -3,7 +3,7 @@ import enum
 import logging
 import pathlib as pl
 import subprocess
-from typing import Dict, Type, List, Set
+from typing import Dict, Type, List, Set, Union
 
 from agent_build_refactored.tools.constants import SOURCE_ROOT, CpuArch, AGENT_REQUIREMENTS, REQUIREMENTS_DEV_COVERAGE
 from agent_build_refactored.tools.docker.common import delete_container
@@ -60,7 +60,7 @@ class ContainerisedAgentBuilder(Builder):
     def _build_dependencies(
         cls,
         stage: str,
-        architectures: List[CpuArch],
+        architectures: Union[CpuArch, List[CpuArch]],
         output: BuildOutput,
         cache_name: str = None,
         fallback_to_remote_builder: bool = False,
@@ -135,7 +135,7 @@ class ContainerisedAgentBuilder(Builder):
             self._build_dependencies(
                 stage=stage_name,
                 cache_name=cache_name,
-                architectures=[arch],
+                architectures=arch,
                 output=LocalDirectoryBuildOutput(
                     dest=arch_dir,
                 ),

@@ -212,10 +212,15 @@ def buildx_build(
 
         logger.info("Cache is is not enough to perform a local build, repeat the build in a remote builder")
 
+        if isinstance(architecture, CpuArch):
+            remote_builder_arch = architecture
+        else:
+            remote_builder_arch = architecture[0]
+
         from agent_build_refactored.tools.docker.buildx.remote_builder import get_remote_builder
 
         builder = get_remote_builder(
-            architecture=architecture,
+            architecture=remote_builder_arch,
         )
 
         if USE_GHA_CACHE:
