@@ -799,7 +799,6 @@ jobs:
 
       - name: Verify and Create Tags
         id: verify
-        if: github.ref_type == 'tag'
         run: |
           
           if [ "${{ github.ref_type }}" = "tag" ]; then
