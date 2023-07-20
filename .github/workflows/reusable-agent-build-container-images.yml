@@ -805,17 +805,15 @@ jobs:
         id: verify
         shell: bash
         run: |
-          AGENT_VERSION="v$(cat VERSION | tr -d '\n')"
-          echo "${AGENT_VERSION}"
           if [ "${{ github.ref_type }}" = "tag" ]; then
             AGENT_VERSION="$(cat VERSION | tr -d '\n')"
-            if [ "${{ github.ref_name }}" = "${AGENT_VERSION}" ]; then
+            if [ "${{ github.ref_name }}" = "v${AGENT_VERSION}" ]; then
               echo "publish=true" >> "${GITHUB_OUTPUT}"
               echo "tags=${{ github.ref_name }},latest" >> "${GITHUB_OUTPUT}"
             fi
           else
               echo "publish=true" >> "${GITHUB_OUTPUT}"
-              echo "tags=${{ github.sha }}" >> "${GITHUB_OUTPUT}"
+              echo "tags=${{ github.sha }},latest" >> "${GITHUB_OUTPUT}"
           fi
 
       - name: Publish image
