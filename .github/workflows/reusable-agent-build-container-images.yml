@@ -817,7 +817,7 @@ jobs:
           fi
 
       - name: Publish image
-        #if: steps.verify.outputs.publish == 'true'
+        if: steps.verify.outputs.publish == 'true'
         run: |
           echo "${{ steps.verify.outputs.publish  }}"
           python3 build_package_new.py \
