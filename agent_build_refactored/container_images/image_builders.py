@@ -252,6 +252,10 @@ class ContainerisedAgentBuilder(Builder):
                 "--dest-no-creds",
                 "--dest-tls-verify=false",
             ])
+        else:
+            cmd_args.append(
+                f"--dest-creds {registry_username}:{registry_password}"
+            )
 
         delete_container(
             container_name=container_name,
