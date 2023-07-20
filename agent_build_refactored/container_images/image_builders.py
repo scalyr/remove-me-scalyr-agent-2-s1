@@ -193,7 +193,7 @@ class ContainerisedAgentBuilder(Builder):
             shutil.rmtree(third_party_dir)
 
         # Remove cache
-        for pycache_dir in agent_filesystem_dir.rglob("__pycache__"):
+        for pycache_dir in self.work_dir.rglob("__pycache__"):
             shutil.rmtree(pycache_dir)
 
         # Also change shebang in the agent_main file to python3, since all images fully switched to it.
