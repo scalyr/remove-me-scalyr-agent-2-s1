@@ -166,8 +166,8 @@ jobs:
           python3 build_package_new.py \
             image \
             ${{ matrix.variant.builder_name }} \
+            build 
             --image-type ${{  matrix.variant.image_type }} \
-            build \
             --output-dir ./build
 
       - name: Save image OCI tarball as artifact
