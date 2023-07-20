@@ -27,18 +27,18 @@ def build_test_version_of_container_image(
         container_name=registry_container_name
     )
 
-    # subprocess.run(
-    #     [
-    #         "docker",
-    #         "run",
-    #         "-d",
-    #         "--rm",
-    #         "-p=5000:5000",
-    #         f"--name={registry_container_name}",
-    #         "registry:2",
-    #     ],
-    #     check=True
-    # )
+    subprocess.run(
+        [
+            "docker",
+            "run",
+            "-d",
+            "--rm",
+            "-p=5000:5000",
+            f"--name={registry_container_name}",
+            "registry:2",
+        ],
+        check=True
+    )
     try:
         all_image_tags = image_builder.generate_final_registry_tags(
             registry="localhost:5000",

@@ -73,13 +73,6 @@ if __name__ == "__main__":
         choices=ALL_CONTAINERISED_AGENT_BUILDERS.keys(),
     )
 
-    def _add_images_type_arg(_parser):
-        _parser.add_argument(
-            "--image-type",
-            required=True,
-            choices=[t.value for t in ImageType]
-        )
-
     image_parser_action_subparsers = image_parser.add_subparsers(dest="action", required=True)
 
     image_build_parser = image_parser_action_subparsers.add_parser("build")
@@ -87,18 +80,9 @@ if __name__ == "__main__":
         "--output-dir",
         required=True,
     )
-    _add_images_type_arg(image_build_parser)
-
-    image_only_dependency_parser = image_parser_action_subparsers.add_parser("build-only-cache-dependency")
-    image_only_dependency_parser.add_argument(
-        "--architecture",
-        required=True,
-        choices=[a.value for a in SUPPORTED_ARCHITECTURES]
-    )
 
     image_publish_parser = image_parser_action_subparsers.add_parser("publish")
 
-    _add_images_type_arg(image_publish_parser)
     image_publish_parser.add_argument(
         "--registry",
         required=True,
@@ -130,31 +114,20 @@ if __name__ == "__main__":
     elif args.command == "image":
         image_builder_cls = ALL_CONTAINERISED_AGENT_BUILDERS[args.builder_name]
 
-        if args.action == "build-only-cache-dependency":
-            builder = image_builder_cls(
-                only_cache_dependency_arch=CpuArch(args.architecture)
-            )
-            builder.build()
-            exit(0)
-        elif args.action == "build":
+        builder = image_builder_cls()
+
+        if args.action == "build":
             if args.output_dir:
                 output_dir = pl.Path(args.output_dir)
             else:
                 output_dir = None
 
-            builder = image_builder_cls(
-                image_type=ImageType(args.image_type),
-            )
             builder.build(
                 output_dir=output_dir
             )
             exit(0)
         elif args.action == "publish":
             tags = args.tags.split(",")
-
-            builder = image_builder_cls(
-                image_type=ImageType(args.image_type),
-            )
 
             if args.from_oci_layout_dir:
                 existing_oci_layout_dir = pl.Path(args.from_oci_layout_dir)

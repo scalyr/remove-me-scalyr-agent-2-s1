@@ -42,26 +42,15 @@ _IMAGE_REGISTRY_NAMES = {
 
 class ContainerisedAgentBuilder(Builder):
     BASE_DISTRO: str
+    IMAGE_TYPE: ImageType
     TAG_SUFFIXES: List[str]
 
     _requirements_libs_already_built = False
     _final_image_base_already_built = False
 
-    def __init__(
-        self,
-        image_type: ImageType = None,
-        architecture: CpuArch = None,
-        only_cache_dependency_arch: CpuArch = None,
-    ):
-        super(ContainerisedAgentBuilder, self).__init__()
-        self.image_type = image_type
-
-        self.architecture = architecture
-        self.only_cache_dependency_arch = only_cache_dependency_arch
-
     @property
     def result_oci_layout_tarball_path(self) -> pl.Path:
-        return self.result_dir / f"{self.image_type.value}-{self.__class__.NAME}.tar"
+        return self.result_dir / f"{self.__class__.NAME}.tar"
 
     @property
     def dependencies_dir(self) -> pl.Path:
@@ -147,7 +136,7 @@ class ContainerisedAgentBuilder(Builder):
     ):
         result_names = []
 
-        for image_name in _IMAGE_REGISTRY_NAMES[self.image_type]:
+        for image_name in _IMAGE_REGISTRY_NAMES[self.__class__.IMAGE_TYPE]:
             for tag in tags:
                 for tag_suffix in self.__class__.TAG_SUFFIXES:
                     final_name = f"{registry}/{user}/{image_name}:{tag}{tag_suffix}"
@@ -164,7 +153,7 @@ class ContainerisedAgentBuilder(Builder):
         pl.Path(agent_filesystem_dir / "var/log/scalyr-agent-2/containers").mkdir()
 
         # Add config file
-        config_name = self.image_type.value
+        config_name = self.__class__.IMAGE_TYPE.value
         config_path = SOURCE_ROOT / "docker" / f"{config_name}-config"
         add_config(config_path, agent_filesystem_dir / "etc/scalyr-agent-2")
 
@@ -181,9 +170,6 @@ class ContainerisedAgentBuilder(Builder):
 
         final_image_base_oci_layout_dir = self._build_final_image_base_oci_layout()
 
-        if self.image_type is None:
-            raise Exception("Image type has to be specified for a full build.")
-
         agent_filesystem_dir = self.create_agent_filesystem()
 
         buildx_build(
@@ -192,7 +178,7 @@ class ContainerisedAgentBuilder(Builder):
             architecture=SUPPORTED_ARCHITECTURES[:],
             build_args={
                 "BASE_DISTRO": self.__class__.BASE_DISTRO,
-                "IMAGE_TYPE": self.image_type.value
+                "IMAGE_TYPE": self.__class__.IMAGE_TYPE.value
             },
             build_contexts={
                 "base_image": f"oci-layout:///{final_image_base_oci_layout_dir}",
@@ -273,15 +259,17 @@ def _arch_to_docker_build_target_folder(arch: CpuArch):
 ALL_CONTAINERISED_AGENT_BUILDERS: Dict[str, Type[ContainerisedAgentBuilder]] = {}
 
 for base_distro in ["ubuntu", "alpine"]:
-    tag_suffixes = [f"-{base_distro}"]
-    if base_distro == "ubuntu":
-        tag_suffixes.append("")
+    for image_type in ImageType:
+        tag_suffixes = [f"-{base_distro}"]
+        if base_distro == "ubuntu":
+            tag_suffixes.append("")
 
-    name = base_distro
+        name = f"{image_type.value}-{base_distro}"
 
-    class _ContainerisedAgentBuilder(ContainerisedAgentBuilder):
-        NAME = name
-        BASE_DISTRO = base_distro
-        TAG_SUFFIXES = tag_suffixes[:]
+        class _ContainerisedAgentBuilder(ContainerisedAgentBuilder):
+            NAME = name
+            BASE_DISTRO = base_distro
+            IMAGE_TYPE = image_type
+            TAG_SUFFIXES = tag_suffixes[:]
 
-    ALL_CONTAINERISED_AGENT_BUILDERS[name] = _ContainerisedAgentBuilder
+        ALL_CONTAINERISED_AGENT_BUILDERS[name] = _ContainerisedAgentBuilder
