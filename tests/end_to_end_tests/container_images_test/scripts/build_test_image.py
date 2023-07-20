@@ -6,6 +6,7 @@ import sys
 # local packages. All such imports also have to be done after that.
 sys.path.append(str(pl.Path(__file__).parent.parent.parent.parent.parent.absolute()))
 
+from agent_build_refactored.tools.constants import CpuArch
 from agent_build_refactored.tools.common import init_logging
 from agent_build_refactored.container_images.image_builders import ImageType
 from tests.end_to_end_tests.container_images_test.conftest import add_command_line_args
@@ -34,6 +35,7 @@ if __name__ == '__main__':
 
     build_test_version_of_container_image(
         image_builder_cls=image_builder_cls,
+        architecture=CpuArch(args.architecture),
         result_image_name=args.result_image_name,
         ready_image_oci_tarball=args.image_oci_tarball,
     )

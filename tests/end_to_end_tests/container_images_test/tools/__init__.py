@@ -2,7 +2,7 @@ import pathlib as pl
 import subprocess
 from typing import Type
 
-from agent_build_refactored.tools.constants import REQUIREMENTS_DEV_COVERAGE, AGENT_BUILD_OUTPUT_PATH
+from agent_build_refactored.tools.constants import REQUIREMENTS_DEV_COVERAGE, AGENT_BUILD_OUTPUT_PATH, CpuArch
 from agent_build_refactored.tools.docker.common import delete_container
 from agent_build_refactored.tools.docker.buildx.build import buildx_build, DockerImageBuildOutput
 from agent_build_refactored.container_images.image_builders import ALL_CONTAINERISED_AGENT_BUILDERS, ImageType, ContainerisedAgentBuilder, SUPPORTED_ARCHITECTURES
@@ -12,6 +12,7 @@ _PARENT_DIR = pl.Path(__file__).parent
 
 def build_test_version_of_container_image(
     image_builder_cls: Type[ContainerisedAgentBuilder],
+    architecture: CpuArch,
     result_image_name: str,
     ready_image_oci_tarball: pl.Path = None,
 ):
@@ -55,7 +56,7 @@ def build_test_version_of_container_image(
         buildx_build(
             dockerfile_path=_PARENT_DIR / "Dockerfile",
             context_path=_PARENT_DIR,
-            architecture=SUPPORTED_ARCHITECTURES[:],
+            architecture=architecture,
             build_contexts={
                 "prod_image": f"docker-image://{prod_image_tag}",
                 "requirement_libs": str(requirement_libs_dir),
