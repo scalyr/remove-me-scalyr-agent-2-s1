@@ -128,6 +128,25 @@ class ContainerisedAgentBuilder(Builder):
 
         return result_names
 
+    def create_agent_filesystem(self):
+        agent_filesystem_dir = self.work_dir / "agent_filesystem"
+        build_linux_fhs_agent_files(
+            output_path=agent_filesystem_dir,
+        )
+        # Need to create some docker specific directories.
+        pl.Path(agent_filesystem_dir / "var/log/scalyr-agent-2/containers").mkdir()
+
+        # Add config file
+        config_name = self.image_type.value
+        config_path = SOURCE_ROOT / "docker" / f"{config_name}-config"
+        add_config(config_path, agent_filesystem_dir / "etc/scalyr-agent-2")
+
+        agent_main_path = agent_filesystem_dir / "usr/share/scalyr-agent-2/py/scalyr_agent/agent_main.py"
+        agent_main_content = agent_main_path.read_text()
+        new_agent_main_content = agent_main_content.replace("#!/usr/bin/env python", "#!/usr/bin/env python3", 1)
+        agent_main_path.write_text(new_agent_main_content)
+        return agent_filesystem_dir
+
     def _build(self):
 
         if self.only_cache_dependency_arch:
@@ -148,17 +167,7 @@ class ContainerisedAgentBuilder(Builder):
         if self.image_type is None:
             raise Exception("Image type has to be specified for a full build.")
 
-        agent_filesystem_dir = self.work_dir / "agent_filesystem"
-        build_linux_fhs_agent_files(
-            output_path=agent_filesystem_dir,
-        )
-        # Need to create some docker specific directories.
-        pl.Path(agent_filesystem_dir / "var/log/scalyr-agent-2/containers").mkdir()
-
-        # Add config file
-        config_name = self.image_type.value
-        config_path = SOURCE_ROOT / "docker" / f"{config_name}-config"
-        add_config(config_path, agent_filesystem_dir / "etc/scalyr-agent-2")
+        agent_filesystem_dir = self.create_agent_filesystem()
 
         base_image_name = BASE_DISTRO_IMAGE_NAMES[self.__class__.BASE_DISTRO]
 
