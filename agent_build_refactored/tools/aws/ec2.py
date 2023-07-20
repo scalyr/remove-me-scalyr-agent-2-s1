@@ -301,8 +301,11 @@ class EC2InstanceWrapper:
 
         name = f"cicd(disposable)-dataset-agent-{aws_settings.cicd_workflow}"
 
+        if aws_settings.cicd_job:
+            name = f"{name}-{aws_settings.cicd_job}"
+
         if not _existing_security_group_id:
-            security_group_name = f"cicd(disposable)-dataset-agent-{aws_settings.cicd_workflow}_{aws_settings.cicd_job}"
+            security_group_name = name
 
             resp = ec2_client.create_security_group(
                 Description='Created by the dataset agent Github Actions Ci/CD to access ec2 instance that '
@@ -582,7 +585,7 @@ def terminate_ec2_instances_and_security_groups(
                     )
                 except botocore.exceptions.ClientError as e:
                     if "has a dependent object" in str(e):
-
+                        logger.info("    ")
                         if attempts == 0:
                             logger.exception("    Give up")
                             raise
