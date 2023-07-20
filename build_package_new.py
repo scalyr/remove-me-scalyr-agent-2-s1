@@ -82,6 +82,14 @@ if __name__ == "__main__":
         "--from-oci-layout-dir",
         required=False,
     )
+    image_publish_parser.add_argument(
+        "--registry-username",
+        required=False,
+    )
+    image_publish_parser.add_argument(
+        "--registry-password",
+        required=False,
+    )
 
     args = parser.parse_args()
 
@@ -115,6 +123,8 @@ if __name__ == "__main__":
             )
             builder.publish(
                 tags=final_tags,
-                existing_oci_layout_dir=existing_oci_layout_dir
+                existing_oci_layout_dir=existing_oci_layout_dir,
+                registry_username=args.registry_username,
+                registry_password=args.registry_password,
             )
             exit(0)
