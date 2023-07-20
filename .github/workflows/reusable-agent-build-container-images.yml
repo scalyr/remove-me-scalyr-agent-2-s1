@@ -45,8 +45,8 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        builder_name: ["alpine"]
-        architecture: ["x86_64"]
+        builder_name: ["ubuntu", "alpine"]
+        architecture: ["x86_64", "aarch64", "armv7"]
 
     steps:
       - name: Checkout repository
