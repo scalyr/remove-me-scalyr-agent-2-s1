@@ -60,7 +60,7 @@ if __name__ == "__main__":
 
     def _add_image_type_arg(_parser):
         _parser.add_argument(
-            "--image_type",
+            "--image-type",
             required=True,
             choices=[t.value for t in ImageType],
         )
