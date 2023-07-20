@@ -823,11 +823,11 @@ jobs:
     strategy:
       matrix:
         variant:
-          - { "builder_name": "ubuntu" , "image_type": "k8d" }
+          - { "builder_name": "ubuntu" , "image_type": "k8s" }
           - { "builder_name": "ubuntu" , "image_type": "docker-json" }
           - { "builder_name": "ubuntu" , "image_type": "docker-syslog" }
           - { "builder_name": "ubuntu" , "image_type": "docker-api" }
-          - { "builder_name": "alpine" , "image_type": "k8d" }
+          - { "builder_name": "alpine" , "image_type": "k8s" }
           - { "builder_name": "alpine" , "image_type": "docker-json" }
           - { "builder_name": "alpine" , "image_type": "docker-syslog" }
           - { "builder_name": "alpine" , "image_type": "docker-api" }
@@ -865,7 +865,6 @@ jobs:
       - name: Publish image
         if: steps.verify.outputs.publish == 'true'
         run: |
-          echo "${{ steps.verify.outputs.publish  }}"
           python3 build_package_new.py \
             image \
             ${{ matrix.variant.builder_name }} \
