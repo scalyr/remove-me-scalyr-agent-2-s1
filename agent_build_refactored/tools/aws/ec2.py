@@ -329,7 +329,6 @@ class EC2InstanceWrapper:
             _existing_security_group_id = security_group_id
 
             ip_address = _get_current_ip_address()
-            ip_address = "87.116.167.196"
 
             # Create new security group for new instance.
             ec2_client.authorize_security_group_ingress(

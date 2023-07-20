@@ -202,12 +202,6 @@ def main():
     ec2_resource = boto3_session.resource("ec2")
     ec2_client = boto3_session.client("ec2")
 
-    cleanup_old_volumes(
-        ec2_resource=ec2_resource,
-    )
-
-    return
-
     cleanup_old_ec2_instances_and_related_objects(
         ec2_client=ec2_client,
         ec2_resource=ec2_resource,
