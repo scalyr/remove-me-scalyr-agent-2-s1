@@ -180,7 +180,6 @@ jobs:
           CICD_JOB: ${{  matrix.variant.image_type }}-${{ matrix.variant.builder_name }}
 
           USE_GHA_CACHE: "1"
-          ALLOW_FALLBACK_TO_REMOTE_BUILDER: "1"
           CACHE_VERSION: ${{ inputs.cache_version }}
         run: |
           python3 build_package_new.py \
