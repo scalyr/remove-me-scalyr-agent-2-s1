@@ -2,7 +2,7 @@ ARG BASE_DISTRO
 
 FROM ubuntu:22.04 as base_ubuntu
 
-FROM python:3.8.16-alpine as base_alpine
+FROM alpine:3.18.2 as base_alpine
 
 FROM base_ubuntu as build_base_ubuntu
 ENV DEBIANFRONTEND=noninteractive
@@ -23,7 +23,9 @@ RUN apk update && apk add --virtual build-dependencies \
     g++ \
     make \
     curl \
+    python3 \
     python3-dev \
+    py3-pip \
     patchelf \
     git \
     bash \
@@ -60,5 +62,6 @@ RUN DEBIANFRONTEND=noninteractive apt-get update && \
 
 
 FROM base_alpine as final_image_base_alpine
+RUN apk update && apk add --no-cache python3 py3-pip
 
 FROM final_image_base_${BASE_DISTRO} as final_image_base
