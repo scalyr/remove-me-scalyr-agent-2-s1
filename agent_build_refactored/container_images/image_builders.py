@@ -459,7 +459,7 @@ def _get_current_machine_architecture():
         return CpuArch.ARMV7
 
     # Add more CPU architectures if needed.
-    raise Exception("unknown CPU")
+    raise Exception(f"unknown CPU {machine}")
 
 
 _current_cpu_arch = _get_current_machine_architecture()
