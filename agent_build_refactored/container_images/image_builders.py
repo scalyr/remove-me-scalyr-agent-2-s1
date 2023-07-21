@@ -27,6 +27,7 @@ SUPPORTED_ARCHITECTURES = [
 
 logger = logging.getLogger(__name__)
 _PARENT_DIR = pl.Path(__file__).parent
+_BASE_IMAGES_DIR = _PARENT_DIR / "base_images"
 
 
 class ImageType(enum.Enum):
@@ -215,6 +216,33 @@ class ContainerisedAgentBuilder(Builder):
         new_agent_main_content = agent_main_content.replace("#!/usr/bin/env python", "#!/usr/bin/env python3", 1)
         agent_main_path.write_text(new_agent_main_content)
         return agent_filesystem_dir
+
+    def _build_base_image(
+        self,
+        architecture: Union[CpuArch, List[CpuArch]],
+        stage: str,
+        cache_name: str = None,
+    ):
+        buildx_build(
+            dockerfile_path=_BASE_IMAGES_DIR / f"{self.__class__.BASE_DISTRO}.Dockerfile",
+            context_path=_BASE_IMAGES_DIR,
+            architecture=architecture,
+            stage=stage,
+            cache_name=cache_name,
+        )
+
+    def build_full_image_base(
+        self,
+        architecture: Union[CpuArch, List[CpuArch]],
+    ):
+
+        name = "agent_image_build_full_base"
+        self._build_base_image(
+            architecture=architecture,
+            stage="full_base",
+            cache_name=""
+        )
+
 
     def _build(
         self,
@@ -423,8 +451,13 @@ for base_distro in ["ubuntu", "alpine"]:
 def _get_current_machine_architecture():
     machine = platform.machine()
 
-    if machine == "x86_64":
+    if machine in ["x86_64"]:
         return CpuArch.x86_64
+    if machine in ["aarch64"]:
+        return CpuArch.AARCH64
+    if machine in ["armv7l"]:
+        return CpuArch.ARMV7
+
     # Add more CPU architectures if needed.
     raise Exception("unknown CPU")
 
