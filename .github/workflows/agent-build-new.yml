@@ -9,6 +9,7 @@ on:
   pull_request:
     branches:
       - master
+      - new-image-builders
   workflow_dispatch:
 
   schedule:
