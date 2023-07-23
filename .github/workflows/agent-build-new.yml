@@ -51,6 +51,8 @@ jobs:
           echo "cicd_workflow=${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}" >> "${GITHUB_OUTPUT}"
 
   build-linux-packages:
+    # Disable this build (for now) for the S1 repository.
+    if: ${{ false }}
     name: "Build Linux packages"
     uses: ./.github/workflows/reusable-agent-build-linux-packages-new.yml
     secrets:
@@ -83,14 +85,16 @@ jobs:
 
 
   build-windows-package:
-    name: "Build Windows package"
+    # Disable this build (for now) for the S1 repository.
+    if: ${{ false }}
     uses: ./.github/workflows/reusable-agent-build-windows.yml
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   build_tarball:
+    # Disable this build (for now) for the S1 repository.
+    if: ${{ false }}
     runs-on: ubuntu-20.04
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -128,6 +132,8 @@ jobs:
   # Aggregate all agent build artifacts that we build by this workflow and put in a single artifact,
   # so it's just need to download only one artifact, for example during a release process.
   prepare-artifacts:
+    # Disable this build (for now) for the S1 repository.
+    if: ${{ false }}
     runs-on: ubuntu-20.04
     needs:
       - build-linux-packages
@@ -156,6 +162,7 @@ jobs:
           name: result-artifacts
           path: /tmp/result_artifacts
           retention-days: 1
+
 
   clean-ec2-tests-objects:
     name: Remove ec2 test workflow prefix list entries
