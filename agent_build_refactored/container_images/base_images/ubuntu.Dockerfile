@@ -11,7 +11,7 @@ RUN apt-get install -y \
     cargo && \
     apt-get autoremove --yes && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/* \
+    rm -rf /var/lib/apt/lists/*
 
 
 
@@ -23,4 +23,4 @@ RUN DEBIANFRONTEND=noninteractive apt-get update && \
     python3 && \
     apt-get autoremove --yes && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/* \
+    rm -rf /var/lib/apt/lists/*
