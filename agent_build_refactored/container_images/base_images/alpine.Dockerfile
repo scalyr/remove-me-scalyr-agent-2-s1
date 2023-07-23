@@ -1,7 +1,8 @@
 FROM alpine:3.18.2 as base
 
-FROM base as full_base
-RUN apk update && apk add --virtual build-dependencies \
+FROM base as dependencies_build_base
+RUN apk update && apk add --no-cache \
+    --virtual build-dependencies \
     binutils \
     build-base \
     linux-headers \
@@ -18,5 +19,5 @@ RUN apk update && apk add --virtual build-dependencies \
     rust \
     cargo
 
-FROM base as prod_base
+FROM base as runtime_base
 RUN apk update && apk add --no-cache python3 py3-pip

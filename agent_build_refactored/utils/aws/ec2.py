@@ -352,7 +352,7 @@ class EC2InstanceWrapper:
             )
 
             security_group_id = resp["GroupId"]
-            logger.info(f"Security grou {security_group_id} has been created.")
+            logger.info(f"Security group {security_group_id} has been created.")
 
             _existing_security_group_id = security_group_id
 
@@ -619,7 +619,7 @@ def terminate_ec2_instances_and_security_groups(
                         time.sleep(delay)
                         continue
                     elif "InvalidGroup.NotFound" in str(e):
-                        logger.info("    Security group does not exists. Ignore.")
+                        logger.info("    Security group does not exist. Ignore.")
                         break
                     else:
                         raise

@@ -1,24 +1,8 @@
 ARG IMAGE_TYPE
 
-# This stage builds requirement libraries for the agent.
-FROM build_base as build_requirement_libs
-RUN python3 -m pip install --upgrade setuptools pip --root /tmp/requrements_root
-RUN cp -a /tmp/requrements_root/. /
-ARG AGENT_REQUIREMENTS
-RUN echo "${AGENT_REQUIREMENTS}" > /tmp/requirements.txt
-RUN python3 -m pip install -r /tmp/requirements.txt --root /tmp/requrements_root
-ARG TEST_REQUIREMENTS
-RUN echo "${TEST_REQUIREMENTS}" > /tmp/test_requirments.txt
-RUN python3 -m pip install -r /tmp/test_requirments.txt --root /tmp/test_requrements_root
+FROM requirement_libs_${TARGETOS}_${TARGETARCH}_${TARGETVARIANT}_context as requirement_libs
 
-FROM scratch as requirement_libs
-COPY --from=build_requirement_libs /tmp/requrements_root /requirements
-COPY --from=build_requirement_libs /tmp/test_requrements_root /test_requirements
-
-FROM prod_base as final-common
-ARG TARGETOS
-ARG TARGETARCH
-ARG TARGETVARIANT
+FROM base as final-common
 COPY --from=requirement_libs /requirements /
 COPY --from=agent_filesystem / /
 
