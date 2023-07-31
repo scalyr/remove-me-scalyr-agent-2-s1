@@ -1,4 +1,4 @@
-# This repo was created accidentalli and should be removed.
+# This repo was created accidentally and should be removed.
 
 # Scalyr Agent (scalyr-agent-2)
 
